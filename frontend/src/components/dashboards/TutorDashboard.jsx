@@ -3,6 +3,7 @@ import { AppContext } from "../../context/AppContext";
 import AiTestGenerator from "./AiTestGenerator";
 import AiLessonPlanner from "./AiLessonPlanner";
 import AiIepAssistant from "./AiIepAssistant";
+import AiTutorCopilot from "./AiTutorCopilot";
 import {
   Calendar,
   Users,
@@ -1880,6 +1881,10 @@ export default function TutorDashboard() {
           <ShieldCheck className="tab-trigger-icon" style={{ color: "#34d399" }} />
           <span style={{ fontWeight: activeSubTab === "IepAssistant" ? "700" : "inherit" }}>AI IEP Assistant™</span>
         </button>
+        <button className={`dashboard-tab-trigger ${activeSubTab === "TutorCopilot" ? "active" : ""}`} onClick={() => setActiveSubTab("TutorCopilot")}>
+          <Sparkles className="tab-trigger-icon" style={{ color: "#ec4899" }} />
+          <span style={{ fontWeight: activeSubTab === "TutorCopilot" ? "700" : "inherit" }}>AI Tutor Copilot™</span>
+        </button>
         <button className={`dashboard-tab-trigger ${activeSubTab === "Profile" ? "active" : ""}`} onClick={() => setActiveSubTab("Profile")}>
           <Sliders className="tab-trigger-icon" />
           <span>Invite & Availability</span>
@@ -3486,6 +3491,10 @@ export default function TutorDashboard() {
 
       {activeSubTab === "IepAssistant" && (
         <AiIepAssistant />
+      )}
+
+      {activeSubTab === "TutorCopilot" && (
+        <AiTutorCopilot />
       )}
 
       {/* ----------------------------------------------------

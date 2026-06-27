@@ -39,6 +39,8 @@ export const AppProvider = ({ children }) => {
   const [practiceTests, setPracticeTests] = useState([]);
   const [lessonPlans, setLessonPlans] = useState([]);
   const [iepNotes, setIepNotes] = useState([]);
+  const [copilotRecords, setCopilotRecords] = useState([]);
+
 
   // Live Zoom Integration States
   const [tutorZoomStatus, setTutorZoomStatus] = useState("Not Connected"); // Connected, Not Connected, Reconnect Required
@@ -335,6 +337,31 @@ export const AppProvider = ({ children }) => {
         }));
         setIepNotes(formattedIEPs);
       }
+
+      // M. Fetch Copilot Records
+      const { data: dbCopilot, error: copErr } = await supabase
+        .from("copilot_records")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (!copErr && dbCopilot) {
+        const formattedCopilot = dbCopilot.map((cr) => ({
+          id: cr.id,
+          studentId: cr.student_id,
+          tutorId: cr.tutor_id,
+          subject: cr.subject,
+          topic: cr.topic,
+          gradeLevel: cr.grade_level,
+          sessionContext: cr.session_context,
+          studentChallenge: cr.student_challenge,
+          supportType: cr.support_type,
+          content: cr.content,
+          createdAt: cr.created_at,
+          updatedAt: cr.updated_at
+        }));
+        setCopilotRecords(formattedCopilot);
+      }
+
     } catch (err) {
       console.error("[Supabase Sync] Error during database sync:", err.message);
       setAuthError(err.message);
@@ -1891,6 +1918,49 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  const addCopilotRecord = async (studentId, subject, topic, gradeLevel, sessionContext, studentChallenge, supportType, content) => {
+    if (isSupabaseConfigured() && currentUser) {
+      try {
+        const { error } = await supabase.from("copilot_records").insert({
+          student_id: studentId || null,
+          tutor_id: currentUser.id,
+          subject,
+          topic,
+          grade_level: gradeLevel,
+          session_context: sessionContext || "",
+          student_challenge: studentChallenge || "",
+          support_type: supportType || "",
+          content
+        });
+        if (error) throw error;
+        await fetchLiveDatabaseData(currentUser);
+        return true;
+      } catch (err) {
+        console.error("[Database] Error inserting copilot record:", err);
+        return false;
+      }
+    } else {
+      // In simulation mode, add to memory
+      const newRec = {
+        id: `cop_${Date.now()}`,
+        studentId: studentId || null,
+        tutorId: currentUser?.id || "tut_1",
+        subject,
+        topic,
+        gradeLevel,
+        sessionContext: sessionContext || "",
+        studentChallenge: studentChallenge || "",
+        supportType: supportType || "",
+        content,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      setCopilotRecords((prev) => [newRec, ...prev]);
+      return true;
+    }
+  };
+
+
   const apiFetch = async (url, options = {}) => {
     const headers = { ...(options.headers || {}) };
     
@@ -1952,6 +2022,8 @@ export const AppProvider = ({ children }) => {
         addLessonPlan,
         iepNotes,
         addIepNote,
+        copilotRecords,
+        addCopilotRecord,
         tutorZoomStatus,
         setTutorZoomStatus,
         tutorManualZoomLink,

@@ -2067,6 +2067,192 @@ Current Goals/Foci: "${currentGoals}".`;
 
 
 // =========================================================================
+// PHASE 7: AI TUTOR COPILOT ENDPOINTS
+// =========================================================================
+const copilotDb = [];
+
+// GET: Retrieve all saved copilot records (offline registry)
+app.get("/api/ai/copilot-records", requireAuth, (req, res) => {
+  const { studentId, tutorId } = req.query;
+  let filtered = copilotDb;
+  
+  if (studentId) {
+    filtered = filtered.filter(cr => cr.studentId === studentId);
+  }
+  if (tutorId) {
+    filtered = filtered.filter(cr => cr.tutorId === tutorId);
+  }
+  
+  res.json({ status: "Success", copilotRecords: filtered });
+});
+
+// POST: Save copilot record to local memory (offline fallback)
+app.post("/api/ai/copilot-records", requireAuth, requireRole(["Tutor", "Admin"]), (req, res) => {
+  const { studentId, tutorId, subject, topic, gradeLevel, sessionContext, studentChallenge, supportType, content } = req.body;
+  
+  if (!subject || !topic || !content) {
+    return res.status(400).json({ error: "Missing required copilot record fields." });
+  }
+
+  const newRecord = {
+    id: "cop_" + Math.random().toString(36).substr(2, 9),
+    studentId: studentId || null,
+    tutorId: tutorId || req.user.id || "tut_1",
+    subject,
+    topic,
+    gradeLevel,
+    sessionContext: sessionContext || "",
+    studentChallenge: studentChallenge || "",
+    supportType: supportType || "",
+    content,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  copilotDb.push(newRecord);
+  console.log(`[Database] Copilot record for topic "${topic}" saved to offline in-memory registry.`);
+  res.json({ status: "Success", copilotRecord: newRecord });
+});
+
+// POST: AI Tutor Copilot Generator
+app.post("/api/ai/generate-copilot", requireAuth, requireRole(["Tutor", "Admin"]), async (req, res) => {
+  const {
+    studentId,
+    studentName = "Student",
+    subject = "Mathematics",
+    topic,
+    gradeLevel = "7th Grade",
+    currentLesson = "",
+    studentChallenge = "",
+    supportType = "Analogy"
+  } = req.body;
+
+  if (!subject || !topic) {
+    return res.status(400).json({ error: "Subject and Topic are required fields to run the Copilot." });
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY || process.env.AI_API_KEY;
+  const isAiEnabled = apiKey && !apiKey.includes("PLACEHOLDER") && apiKey.trim().length > 10;
+
+  if (isAiEnabled) {
+    console.log(`[AI Tutor Copilot Engine] Calling Live Gemini AI for Subject: ${subject}, Topic: ${topic}`);
+
+    const systemInstruction = `You are Ambience Tutor Copilot™, an elite, real-time live tutoring support assistant.
+Your output MUST be a single, valid JSON object matching the exact structure below:
+{
+  "simpleExplanation": "String - Simple, intuitive, child-friendly explanation using a rich, helpful analogy",
+  "deeperExplanation": "String - Rigorous, deeper explanation of the underlying concepts, mechanics, and terminology",
+  "teachingGuide": "String - Step-by-step notes, time boundaries, or focal teaching cues for the tutor during the live session",
+  "exampleProblem": "String - A step-by-step worked example demonstrating the solution process cleanly",
+  "practiceProblems": "String - 2-3 practice problems for the student to solve",
+  "hints": "String - Incremental hints corresponding to the practice problems to guide the student without giving away the answer",
+  "commonMistakes": "String - Common student misconceptions, mechanical errors, or slip-ups to watch out for",
+  "iepAccommodations": "String - Dynamic IEP accommodation ideas tailored to the student's specific challenge",
+  "characterReflection": "String - A thoughtful, contextual reflection connecting the learning topic or challenge to Christian character virtues like Grit, Integrity, Diligence, or Perseverance",
+  "parentSummary": "String - Encouraging, positive, jargon-free progress update for the parent",
+  "tutorNotes": "String - Quick, actionable post-session review notes for the tutor's record"
+}
+
+Do not wrap your output in markdown backticks \`\`\`json. Return ONLY the raw JSON object.`;
+
+    const userPrompt = `Generate real-time live support assets for a tutor teaching a ${gradeLevel} student on the subject "${subject}" and topic "${topic}".
+Current lesson context: "${currentLesson}".
+Student's specific challenge: "${studentChallenge}".
+Requested support focus type: "${supportType}".`;
+
+    try {
+      const response = await axios.post(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        {
+          contents: [{ parts: [{ text: userPrompt }] }],
+          systemInstruction: { parts: [{ text: systemInstruction }] },
+          generationConfig: {
+            responseMimeType: "application/json",
+            temperature: 0.3
+          }
+        },
+        { timeout: 15000 }
+      );
+
+      const responseText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (responseText) {
+        const parsedJson = JSON.parse(responseText.trim());
+        return res.json({ status: "Success", source: "GEMINI_API", copilotOutput: parsedJson });
+      }
+    } catch (aiError) {
+      console.error("[AI Tutor Copilot Engine] Live Gemini API failed. Falling back to Offline Rule-Engine.", aiError.message);
+    }
+  }
+
+  // ==========================================
+  // OFFLINE HIGH-FIDELITY RULE-ENGINE FALLBACK
+  // ==========================================
+  console.log(`[AI Tutor Copilot Engine] Utilizing Offline Fallback Engine for Subject: ${subject}, Topic: ${topic}`);
+
+  // Base Fallback Content
+  let simpleExpl = `Think of "${topic}" like a bridge. To get across safely, you have to place each brick one-by-one. If you skip a brick, the bridge gets shaky. In the same way, we tackle this topic step-by-step so our understanding stays strong and rock-solid!`;
+  let deepExpl = `In ${subject}, the topic "${topic}" involves understanding key relational rules, structural components, and notation standards. This concept is fundamental to building advanced fluency in the domain and underpins subsequent curriculum benchmarks.`;
+  let guide = `1. Introduction (3 mins): Direct the student's focus to the core rule.\n2. Guided Example (5 mins): Solve 1 sample problem together.\n3. Student Practice (10 mins): Let the student work independently while you watch for computational slips.`;
+  let example = `Problem: Evaluate / solve a representative task for "${topic}".\nSolution:\nStep 1: Identify key variables.\nStep 2: Apply the core formula / rule.\nStep 3: Simplify and state the final result.`;
+  let practice = `1. Solve a foundational level problem on "${topic}".\n2. Solve a slightly more complex problem containing a minor twist.\n3. Complete a review task applying what you've learned.`;
+  let hints = `Hint for Problem 1: Look at the direct instruction example above.\nHint for Problem 2: Remember to check your signs / vocabulary terms.\nHint for Problem 3: Take your time and outline each step on your workspace first.`;
+  let mistakes = `1. Rushing through steps without noting variables.\n2. Minor sign changes or grammatical flips.\n3. Forgetting to double-check the final solution.`;
+  let accommodations = `1. Intersperse tasks with 1-minute visual brain breaks.\n2. Provide color-coded formula sheet or graphic organizer.\n3. Allow speech-to-text or verbal dictation of answers.`;
+  let charReflect = `Learning "${topic}" can feel challenging, but this is the perfect opportunity to practice Diligence and Perseverance. In Bible Study, we learn that perseverance produces character (Romans 5:4). Every small step you take builds grit!`;
+  let parentSumm = `We had a productive session today! ${studentName} worked through "${topic}" with great effort. We focused on building confidence step-by-step, and ${studentName} showed wonderful diligence. We'll continue reinforcing this in subsequent lessons.`;
+  let tutorNotes = `The student is making steady progress but struggles when tasks become repetitive. For the next session, incorporate a game-like visual aid and offer frequent encouragement to keep engagement high.`;
+
+  // Custom tailoring by subject
+  const lowerSubject = subject.toLowerCase();
+  if (lowerSubject.includes("math") || lowerSubject.includes("calculus") || lowerSubject.includes("algebra")) {
+    simpleExpl = `Think of ${topic} like baking a cake. If you don't follow the recipe steps in order (like parenthesis, exponents, multiplication), your cake won't rise correctly! We use our mathematical recipe to get the exact answer every time.`;
+    deepExpl = `The mechanics of "${topic}" rely on balancing algebraic expressions, utilizing logical transformation rules, and executing precise computations. Isolating variables or applying theorems allows us to maintain mathematical equality across equations.`;
+    example = `Example: Solve for x in a sample ${topic} scenario.\n1. Isolate variable: subtract constants from both sides.\n2. Balance coefficients: divide by multiplier.\n3. Verify: substitute the result back into the original equation to prove equality.`;
+  } else if (lowerSubject.includes("science") || lowerSubject.includes("physics") || lowerSubject.includes("chemistry")) {
+    simpleExpl = `Think of ${topic} like a tiny biological engine or clock. Every gear (atoms, cells, forces) has a precise job to do. If one gear turns, it causes a chain reaction that makes the whole system work!`;
+    deepExpl = `The scientific framework of "${topic}" describes an empirical, observable process governed by physical laws and molecular/structural models. Understanding this allows us to predict reactions, forces, or cellular actions accurately.`;
+  } else if (lowerSubject.includes("english") || lowerSubject.includes("language") || lowerSubject.includes("ela")) {
+    simpleExpl = `Think of ${topic} like assembling a lego castle. Words and punctuation are the bricks. If we arrange them using the correct rules, we build a solid sentence that everyone can clearly understand!`;
+    deepExpl = `This ELA module targets "${topic}" to develop grammatical synthesis, reading comprehension benchmarks, or analytical writing. Mastering this allows students to construct clear, cohesive structures.`;
+  } else if (lowerSubject.includes("bible")) {
+    simpleExpl = `Think of ${topic} like looking at a treasure map. Every verse and historical context helps us find the deeper truth about God's love, faithfulness, and His beautiful plan for our lives!`;
+    deepExpl = `A theological and historical study of "${topic}". We examine scripture passages, contextual cultural settings, and theological applications to understand the spiritual and practical lessons for daily walk in faith.`;
+    charReflect = `Exploring "${topic}" connects directly to our character. Building Dilligence and Integrity allows us to live out our faith with honesty and love, showing God's grace in everything we do.`;
+  } else if (lowerSubject.includes("computer") || lowerSubject.includes("tech")) {
+    simpleExpl = `Think of ${topic} like writing a secret recipe for a very obedient robot. The robot will do exactly what you write, so we have to give it clear, simple, and numbered steps!`;
+    deepExpl = `Computer science principles of "${topic}" focus on logical flows, syntax constructs, algorithmic efficiency, and debugging structures. Isolating mechanical bugs helps us build resilient software.`;
+  }
+
+  // Incorporate custom student challenge if provided
+  if (studentChallenge) {
+    accommodations = `Accommodations specifically tailored for "${studentChallenge}":\n1. Chunk complex tasks into 3 smaller milestones.\n2. Offer visual step-by-step checklists.\n3. Increase positive reinforcement for each step completed.`;
+    tutorNotes += `\n* Note: Monitored challenge of "${studentChallenge}" closely during tasks. Offered supportive scaffolds.`;
+  }
+
+  const simulatedCopilot = {
+    simpleExplanation: simpleExpl,
+    deeperExplanation: deepExpl,
+    teachingGuide: guide,
+    exampleProblem: example,
+    practiceProblems: practice,
+    hints: hints,
+    commonMistakes: mistakes,
+    iepAccommodations: accommodations,
+    characterReflection: charReflect,
+    parentSummary: parentSumm,
+    tutorNotes: tutorNotes
+  };
+
+  res.json({
+    status: "Success",
+    source: "OFFLINE_DEMO_ENGINE",
+    copilotOutput: simulatedCopilot
+  });
+});
+
+
+// =========================================================================
+
 // HEALTH CHECK ENDPOINT
 // =========================================================================
 app.get("/health", (req, res) => {
