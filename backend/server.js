@@ -1764,6 +1764,309 @@ Do not wrap your output in markdown backticks \`\`\`json. Return ONLY the raw JS
 });
 
 // =========================================================================
+// PHASE 6: AI LESSON PLANNER ENDPOINTS
+// =========================================================================
+const lessonPlansDb = [];
+
+// GET: Retrieve all saved lesson plans (offline registry)
+app.get("/api/ai/lesson-plans", requireAuth, (req, res) => {
+  const { studentId, tutorId } = req.query;
+  let filtered = lessonPlansDb;
+  
+  if (studentId) {
+    filtered = filtered.filter(lp => lp.studentId === studentId);
+  }
+  if (tutorId) {
+    filtered = filtered.filter(lp => lp.tutorId === tutorId);
+  }
+  
+  res.json({ status: "Success", lessonPlans: filtered });
+});
+
+// POST: Save lesson plan to local memory (offline fallback)
+app.post("/api/ai/lesson-plans", requireAuth, requireRole(["Tutor", "Admin"]), (req, res) => {
+  const { studentId, tutorId, title, gradeLevel, subject, topic, duration, learningObjective, difficulty, config, content } = req.body;
+  
+  if (!title || !subject || !topic || !content) {
+    return res.status(400).json({ error: "Missing required lesson plan fields." });
+  }
+
+  const newPlan = {
+    id: "lp_" + Math.random().toString(36).substr(2, 9),
+    studentId: studentId || null,
+    tutorId: tutorId || req.user.id || "tut_1",
+    title,
+    gradeLevel,
+    subject,
+    topic,
+    duration,
+    learningObjective,
+    difficulty,
+    config: config || {},
+    content,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  lessonPlansDb.push(newPlan);
+  console.log(`[Database] Lesson plan "${title}" saved to offline in-memory registry.`);
+  res.json({ status: "Success", lessonPlan: newPlan });
+});
+
+// POST: AI Lesson Planner Generator
+app.post("/api/ai/generate-lesson-plan", requireAuth, requireRole(["Tutor", "Admin"]), async (req, res) => {
+  const {
+    studentId,
+    gradeLevel = "7th Grade",
+    subject,
+    topic,
+    duration = "60 minutes",
+    learningObjective = "Master core concepts",
+    difficulty = "Medium",
+    includeHomework = true,
+    includeAssessment = true,
+    includeCharacterEducation = true
+  } = req.body;
+
+  if (!subject || !topic) {
+    return res.status(400).json({ error: "Subject and Topic are required fields to generate a lesson plan." });
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY || process.env.AI_API_KEY;
+  const isAiEnabled = apiKey && !apiKey.includes("PLACEHOLDER") && apiKey.trim().length > 10;
+
+  if (isAiEnabled) {
+    console.log(`[AI Planner Engine] Calling Live Gemini AI for Subject: ${subject}, Topic: ${topic}`);
+
+    const systemInstruction = `You are Ambience Lesson Planner™, an elite pedagogical AI designed to generate complete, high-fidelity lesson plans.
+Your output MUST be a single, valid JSON object matching the exact structure below:
+{
+  "lessonTitle": "String - Premium, engaging lesson title",
+  "objectives": "String - Clear, SWBAT (Students Will Be Able To) objectives",
+  "warmUp": "String - Engaging 5-10 minute warm-up activity",
+  "directInstruction": "String - Highly detailed core instruction steps and examples",
+  "guidedPractice": "String - Collaborative or structured tutor-led problems or prompts",
+  "independentPractice": "String - Independent work or reflection questions",
+  "exitTicket": "String - Fast formative assessment for the end of session",
+  "homework": "String - Clear, scaffolded reinforcing homework assignment description",
+  "teacherGuide": "String - Step-by-step notes, time boundaries, or focal teaching cues",
+  "differentiationNotes": "String - Accommodations and extensions for diverse learner styles"
+}
+
+Ensure to weave character education elements (Grit, Integrity, Dilligence, and Perseverance) if includeCharacterEducation is true.
+Do not wrap your output in markdown backticks \`\`\`json. Return ONLY the raw JSON object.`;
+
+    const userPrompt = `Generate a comprehensive, highly customized lesson plan for a ${gradeLevel} student on the subject "${subject}" and topic "${topic}".
+Duration: ${duration}.
+Learning Objective: "${learningObjective}".
+Difficulty: "${difficulty}".
+Include Homework: ${includeHomework}.
+Include Assessment: ${includeAssessment}.
+Include Character Education: ${includeCharacterEducation}.`;
+
+    try {
+      const response = await axios.post(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        {
+          contents: [{ parts: [{ text: userPrompt }] }],
+          systemInstruction: { parts: [{ text: systemInstruction }] },
+          generationConfig: {
+            responseMimeType: "application/json",
+            temperature: 0.4
+          }
+        },
+        { timeout: 15000 }
+      );
+
+      const responseText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (responseText) {
+        const parsedJson = JSON.parse(responseText.trim());
+        return res.json({ status: "Success", source: "GEMINI_API", lessonPlan: parsedJson });
+      }
+    } catch (aiError) {
+      console.error("[AI Planner Engine] Live Gemini API failed. Falling back to Offline Rule-Engine.", aiError.message);
+    }
+  }
+
+  // ==========================================
+  // OFFLINE HIGH-FIDELITY RULE-ENGINE FALLBACK
+  // ==========================================
+  console.log(`[AI Planner Engine] Utilizing Offline Fallback Engine for Subject: ${subject}, Topic: ${topic}`);
+
+  // Compose premium tailored offline responses based on parameters
+  let title = `${gradeLevel} - Structured Lesson: ${topic.charAt(0).toUpperCase() + topic.slice(1)}`;
+  let obj = `Students will be able to master the fundamental mechanics of "${topic}" at a ${difficulty} difficulty tier within ${duration}.`;
+  let warm = `1. Hook (5 mins): Provide an real-life analogy connected to ${topic}.\n2. Prior Knowledge Check: Ask the student to define basic prerequisites.`;
+  let direct = `Core Concepts (15 mins):\n- Walk through 3 step-by-step examples of "${topic}".\n- Identify the core rules and notation variables.\n- Highlight critical focal definitions.`;
+  let guided = `Coached Problems (15 mins):\n- Problem 1: Work together, explaining each transition step.\n- Problem 2: Tutor writes the problem; student dictates steps.\n- Problem 3: Student completes with hints available.`;
+  let independent = `Student Solo Flight (15 mins):\n- Complete a set of 3 practice tasks covering different aspects of ${topic}.\n- Correct any minor execution slips.`;
+  let exit = `Formative Check (5 mins):\n- Prompt: Explain in your own words the single most important rule for resolving "${topic}".`;
+  let hw = includeHomework ? `Create a follow-up sheet of 5 scaffolded review tasks targeting "${topic}". Recommended completion time: 15 minutes.` : "Disabled by tutor configurations.";
+  let guide = `Teacher Cues:\n- Keep an eye on time constraints during the warm-up.\n- Ensure the student takes notes on formulas or vocab words.\n- Praise correct steps to build academic confidence.`;
+  let diff = `Differentiation:\n- Support: Offer visual guides or pre-written vocabulary cards.\n- Extension: Encourage the student to explain a complex edge-case scenario.`;
+
+  if (includeCharacterEducation) {
+    obj += ` Incorporates reflections on 'Diligence and Perseverance'.`;
+    warm += ` Connect the challenge of learning "${topic}" to the virtue of Perseverance.`;
+    independent += ` Discuss how overcoming complex academic problems builds Grit and Integrity.`;
+  }
+
+  const simulatedPlan = {
+    lessonTitle: title,
+    objectives: obj,
+    warmUp: warm,
+    directInstruction: direct,
+    guidedPractice: guided,
+    independentPractice: independent,
+    exitTicket: exit,
+    homework: hw,
+    teacherGuide: guide,
+    differentiationNotes: diff
+  };
+
+  res.json({
+    status: "Success",
+    source: "OFFLINE_DEMO_ENGINE",
+    lessonPlan: simulatedPlan
+  });
+});
+
+
+// =========================================================================
+// PHASE 6: AI IEP ASSISTANT ENDPOINTS
+// =========================================================================
+const iepNotesDb = [];
+
+// GET: Retrieve all saved IEP notes (offline registry)
+app.get("/api/ai/iep-notes", requireAuth, (req, res) => {
+  const { studentId, tutorId } = req.query;
+  let filtered = iepNotesDb;
+  
+  if (studentId) {
+    filtered = filtered.filter(iep => iep.studentId === studentId);
+  }
+  if (tutorId) {
+    filtered = filtered.filter(iep => iep.tutorId === tutorId);
+  }
+  
+  res.json({ status: "Success", iepNotes: filtered });
+});
+
+// POST: Save IEP notes to local memory (offline fallback)
+app.post("/api/ai/iep-notes", requireAuth, requireRole(["Tutor", "Admin"]), (req, res) => {
+  const { studentId, tutorId, strengths, challenges, accommodations, goals, progressNotes, parentSummary, tutorSteps } = req.body;
+  
+  if (!studentId || !strengths || !challenges || !accommodations || !goals) {
+    return res.status(400).json({ error: "Missing required IEP assistant fields." });
+  }
+
+  const newIEP = {
+    id: "iep_" + Math.random().toString(36).substr(2, 9),
+    studentId,
+    tutorId: tutorId || req.user.id || "tut_1",
+    strengths,
+    challenges,
+    accommodations,
+    goals,
+    progressNotes,
+    parentSummary,
+    tutorSteps,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  iepNotesDb.push(newIEP);
+  console.log(`[Database] IEP notes for student "${studentId}" saved to offline in-memory registry.`);
+  res.json({ status: "Success", iepNote: newIEP });
+});
+
+// POST: AI IEP Assistant Generator
+app.post("/api/ai/generate-iep-notes", requireAuth, requireRole(["Tutor", "Admin"]), async (req, res) => {
+  const {
+    studentId,
+    studentName = "Student",
+    strengths = "Eager to learn",
+    challenges = "Easily distracted during long tasks",
+    currentGoals = "Build math fluency and focus"
+  } = req.body;
+
+  if (!studentId) {
+    return res.status(400).json({ error: "Student ID is a required field." });
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY || process.env.AI_API_KEY;
+  const isAiEnabled = apiKey && !apiKey.includes("PLACEHOLDER") && apiKey.trim().length > 10;
+
+  if (isAiEnabled) {
+    console.log(`[AI IEP Assistant] Calling Live Gemini AI for Student: ${studentName}`);
+
+    const systemInstruction = `You are Ambience AI IEP Assistant™, an elite special education mentor designed to support tutors with accommodations, progress monitoring, and parents communication.
+Your output MUST be a single, valid JSON object matching this structure:
+{
+  "strengths": "String - Formally structured overview of student strengths",
+  "challenges": "String - Analytical breakdown of academic or behavioral challenges",
+  "accommodationSuggestions": "String - Detailed lists of customized accommodation strategies (e.g. visual aids, extra breaks, graphic organizers)",
+  "goalDrafting": "String - SMART (Specific, Measurable, Attainable, Relevant, Time-bound) goals with measurable metrics",
+  "progressNotes": "String - Narrative tracking how the tutor can measure progress weekly",
+  "parentSummary": "String - Encouraging, parent-friendly summary of updates and partnerships",
+  "tutorSteps": "String - Actionable tutor instructions for subsequent sessions"
+}
+
+Do not wrap your output in markdown backticks \`\`\`json. Return ONLY the raw JSON object.`;
+
+    const userPrompt = `Develop a comprehensive IEP Support Plan for student "${studentName}".
+Strengths: "${strengths}".
+Challenges: "${challenges}".
+Current Goals/Foci: "${currentGoals}".`;
+
+    try {
+      const response = await axios.post(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        {
+          contents: [{ parts: [{ text: userPrompt }] }],
+          systemInstruction: { parts: [{ text: systemInstruction }] },
+          generationConfig: {
+            responseMimeType: "application/json",
+            temperature: 0.3
+          }
+        },
+        { timeout: 15000 }
+      );
+
+      const responseText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (responseText) {
+        const parsedJson = JSON.parse(responseText.trim());
+        return res.json({ status: "Success", source: "GEMINI_API", iepReport: parsedJson });
+      }
+    } catch (aiError) {
+      console.error("[AI IEP Assistant] Live Gemini API failed. Falling back to Offline Rule-Engine.", aiError.message);
+    }
+  }
+
+  // ==========================================
+  // OFFLINE HIGH-FIDELITY RULE-ENGINE FALLBACK
+  // ==========================================
+  console.log(`[AI IEP Assistant] Utilizing Offline Fallback Engine for Student: ${studentName}`);
+
+  const simulatedIEP = {
+    strengths: `${studentName} exhibits excellent intrinsic motivation, a warm attitude toward learning, and notable strengths in conceptual reasoning and oral articulation.`,
+    challenges: `Struggles with ${challenges.toLowerCase()}, which can manifest as computational slips or frustration when faced with complex multi-step problems.`,
+    accommodationSuggestions: `1. Visual Checklists: Break multi-step instructions down into numbered checklists.\n2. Chunked Timing: Set a timer for 15 minutes of focus followed by a 1-minute visual break.\n3. Graphic Organizers: Provide formula reference sheets during sessions.`,
+    goalDrafting: `Goal 1: When presented with a multi-step task, ${studentName} will utilize a visual checklist to solve problems with at least 80% independent accuracy over 4 consecutive tutoring sessions.\nGoal 2: Build computational focus by reducing off-task breaks from 3 per session to 1 or fewer.`,
+    progressNotes: `Track task completion rates and the number of tutor redirects required per session. Log daily scores on computational accuracy.`,
+    parentSummary: `Dear Parent, ${studentName} is doing incredibly well with oral reasoning! We are focusing on supporting mathematical focus and tracking steps using organized checklists. Your support in encouraging ${studentName} to double-check work at home is invaluable.`,
+    tutorSteps: `1. Introduce the session with a 3-step checklist.\n2. Do not explain steps immediately—prompt ${studentName} to identify which checklist item comes next.\n3. Praise diligent effort and resilience rather than pure speed.`
+  };
+
+  res.json({
+    status: "Success",
+    source: "OFFLINE_DEMO_ENGINE",
+    iepReport: simulatedIEP
+  });
+});
+
+
+// =========================================================================
 // HEALTH CHECK ENDPOINT
 // =========================================================================
 app.get("/health", (req, res) => {

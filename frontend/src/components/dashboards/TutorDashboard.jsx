@@ -1,6 +1,8 @@
 import React, { useContext, useState, useEffect } from "react";
 import { AppContext } from "../../context/AppContext";
 import AiTestGenerator from "./AiTestGenerator";
+import AiLessonPlanner from "./AiLessonPlanner";
+import AiIepAssistant from "./AiIepAssistant";
 import {
   Calendar,
   Users,
@@ -1870,6 +1872,14 @@ export default function TutorDashboard() {
           <Sparkles className="tab-trigger-icon" style={{ color: "#a855f7" }} />
           <span style={{ fontWeight: activeSubTab === "TestGenerator" ? "700" : "inherit" }}>AI Test Generator™</span>
         </button>
+        <button className={`dashboard-tab-trigger ${activeSubTab === "LessonPlanner" ? "active" : ""}`} onClick={() => setActiveSubTab("LessonPlanner")}>
+          <Sparkles className="tab-trigger-icon" style={{ color: "#17e9ce" }} />
+          <span style={{ fontWeight: activeSubTab === "LessonPlanner" ? "700" : "inherit" }}>AI Lesson Planner™</span>
+        </button>
+        <button className={`dashboard-tab-trigger ${activeSubTab === "IepAssistant" ? "active" : ""}`} onClick={() => setActiveSubTab("IepAssistant")}>
+          <ShieldCheck className="tab-trigger-icon" style={{ color: "#34d399" }} />
+          <span style={{ fontWeight: activeSubTab === "IepAssistant" ? "700" : "inherit" }}>AI IEP Assistant™</span>
+        </button>
         <button className={`dashboard-tab-trigger ${activeSubTab === "Profile" ? "active" : ""}`} onClick={() => setActiveSubTab("Profile")}>
           <Sliders className="tab-trigger-icon" />
           <span>Invite & Availability</span>
@@ -3468,6 +3478,14 @@ export default function TutorDashboard() {
 
       {activeSubTab === "TestGenerator" && (
         <AiTestGenerator />
+      )}
+
+      {activeSubTab === "LessonPlanner" && (
+        <AiLessonPlanner />
+      )}
+
+      {activeSubTab === "IepAssistant" && (
+        <AiIepAssistant />
       )}
 
       {/* ----------------------------------------------------

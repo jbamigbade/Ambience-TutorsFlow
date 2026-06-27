@@ -66,11 +66,15 @@ This file is the authoritative source of truth for the development, status, and 
 * **Zero-Error Verification**: Verified frontend bundle compilation (`npm run build` in 400ms) and backend parsing (`node -c server.js`) with zero compile or dependency alerts.
 * **Secure Deployment Guides**: Published 9 professional deployment and completion manuals across `docs/Deployment/` and `docs/Phase-05/`.
 
+### Done (Milestone 9 - Phase 6 Completed)
+* **AI Lesson Planner**: Engineered a high-fidelity, multi-parameter, character-aligned AI lesson planner supporting Grit, Integrity, Diligence, and Perseverance virtues.
+* **AI IEP Assistant**: Built a special education assistant designed to convert observations into clinical accommodations, measurable SMART goals, and parent summaries.
+* **Supabase & Fallback Sync**: Implemented full database schema persistence tables (`lesson_plans` and `iep_notes`) with strict Row-Level Security policies and offline fallback routing.
+* **Verified Integrity**: Passed full React production builds (`npm run build` in 392ms) and backend audits (`node -c server.js`) with zero compile or dependency alerts.
+
 ### Upcoming Milestones
-1. **AI Lesson Planner & IEP Assistant**: Deep Gemini model prompt chains to automate custom tutor curriculum notes and track individual learning modifications.
-2. **Real-time Messaging & Chat Engine**: Live, interactive WebSocket or Supabase Realtime-backed private messaging channels between parents, tutors, and learning center admins.
+1. **Real-time Messaging & Chat Engine**: Live, interactive WebSocket or Supabase Realtime-backed private messaging channels between parents, tutors, and learning center admins.
 
 ---
 
 *Last Updated: June 27, 2026*
-

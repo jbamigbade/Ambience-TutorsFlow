@@ -37,6 +37,8 @@ export const AppProvider = ({ children }) => {
   const [bookings, setBookings] = useState(INITIAL_BOOKINGS);
   const [characterNotes, setCharacterNotes] = useState(INITIAL_CHARACTER_NOTES);
   const [practiceTests, setPracticeTests] = useState([]);
+  const [lessonPlans, setLessonPlans] = useState([]);
+  const [iepNotes, setIepNotes] = useState([]);
 
   // Live Zoom Integration States
   const [tutorZoomStatus, setTutorZoomStatus] = useState("Not Connected"); // Connected, Not Connected, Reconnect Required
@@ -282,6 +284,56 @@ export const AppProvider = ({ children }) => {
           updatedAt: t.updated_at
         }));
         setPracticeTests(formattedTests);
+      }
+
+      // K. Fetch Lesson Plans
+      const { data: dbLessonPlans, error: lpErr } = await supabase
+        .from("lesson_plans")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (!lpErr && dbLessonPlans) {
+        const formattedLPs = dbLessonPlans.map((lp) => ({
+          id: lp.id,
+          studentId: lp.student_id,
+          tutorId: lp.tutor_id,
+          title: lp.title,
+          gradeLevel: lp.grade_level,
+          subject: lp.subject,
+          topic: lp.topic,
+          duration: lp.duration,
+          learningObjective: lp.learning_objective,
+          difficulty: lp.difficulty,
+          config: lp.config,
+          content: lp.content,
+          createdAt: lp.created_at,
+          updatedAt: lp.updated_at
+        }));
+        setLessonPlans(formattedLPs);
+      }
+
+      // L. Fetch IEP Notes
+      const { data: dbIEPs, error: iepErr } = await supabase
+        .from("iep_notes")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (!iepErr && dbIEPs) {
+        const formattedIEPs = dbIEPs.map((iep) => ({
+          id: iep.id,
+          studentId: iep.student_id,
+          tutorId: iep.tutor_id,
+          strengths: iep.strengths,
+          challenges: iep.challenges,
+          accommodations: iep.accommodations,
+          goals: iep.goals,
+          progressNotes: iep.progress_notes,
+          parentSummary: iep.parent_summary,
+          tutorSteps: iep.tutor_steps,
+          createdAt: iep.created_at,
+          updatedAt: iep.updated_at
+        }));
+        setIepNotes(formattedIEPs);
       }
     } catch (err) {
       console.error("[Supabase Sync] Error during database sync:", err.message);
@@ -1751,6 +1803,94 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  const addLessonPlan = async (studentId, title, gradeLevel, subject, topic, duration, learningObjective, difficulty, config, content) => {
+    if (isSupabaseConfigured() && currentUser) {
+      try {
+        const { error } = await supabase.from("lesson_plans").insert({
+          student_id: studentId || null,
+          tutor_id: currentUser.id,
+          title,
+          grade_level: gradeLevel,
+          subject,
+          topic,
+          duration,
+          learning_objective: learningObjective,
+          difficulty,
+          config,
+          content
+        });
+        if (error) throw error;
+        await fetchLiveDatabaseData(currentUser);
+        return true;
+      } catch (err) {
+        console.error("[Database] Error inserting lesson plan:", err);
+        return false;
+      }
+    } else {
+      // In simulation mode, add to memory
+      const newLP = {
+        id: `lp_${Date.now()}`,
+        studentId: studentId || null,
+        tutorId: currentUser?.id || "tut_1",
+        title,
+        gradeLevel,
+        subject,
+        topic,
+        duration,
+        learningObjective,
+        difficulty,
+        config,
+        content,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      setLessonPlans((prev) => [newLP, ...prev]);
+      return true;
+    }
+  };
+
+  const addIepNote = async (studentId, strengths, challenges, accommodations, goals, progressNotes, parentSummary, tutorSteps) => {
+    if (isSupabaseConfigured() && currentUser) {
+      try {
+        const { error } = await supabase.from("iep_notes").insert({
+          student_id: studentId,
+          tutor_id: currentUser.id,
+          strengths,
+          challenges,
+          accommodations,
+          goals,
+          progress_notes: progressNotes,
+          parent_summary: parentSummary,
+          tutor_steps: tutorSteps
+        });
+        if (error) throw error;
+        await fetchLiveDatabaseData(currentUser);
+        return true;
+      } catch (err) {
+        console.error("[Database] Error inserting IEP notes:", err);
+        return false;
+      }
+    } else {
+      // In simulation mode, add to memory
+      const newIEP = {
+        id: `iep_${Date.now()}`,
+        studentId,
+        tutorId: currentUser?.id || "tut_1",
+        strengths,
+        challenges,
+        accommodations,
+        goals,
+        progressNotes,
+        parentSummary,
+        tutorSteps,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      setIepNotes((prev) => [newIEP, ...prev]);
+      return true;
+    }
+  };
+
   const apiFetch = async (url, options = {}) => {
     const headers = { ...(options.headers || {}) };
     
@@ -1808,6 +1948,10 @@ export const AppProvider = ({ children }) => {
         practiceTests,
         fetchPracticeTests,
         addPracticeTest,
+        lessonPlans,
+        addLessonPlan,
+        iepNotes,
+        addIepNote,
         tutorZoomStatus,
         setTutorZoomStatus,
         tutorManualZoomLink,
