@@ -28,7 +28,10 @@ export default function AdminDashboard() {
     deleteTutor,
     addStudent,
     deleteStudent,
-    apiFetch
+    apiFetch,
+    currentProfile,
+    isLoading,
+    authError
   } = useContext(AppContext);
 
   const [activeSubTab, setActiveSubTab] = useState("Telemetry"); // Telemetry, Tutors, Students, Billing
@@ -263,6 +266,47 @@ export default function AdminDashboard() {
   return (
     <div className="dashboard-content admin-dashboard animate-fade-in">
       
+      {isLoading && (
+        <div className="loading-spinner-overlay" style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "15px 20px",
+          background: "rgba(30, 41, 59, 0.4)",
+          backdropFilter: "blur(12px)",
+          borderRadius: "12px",
+          border: "1px solid rgba(255, 255, 255, 0.08)",
+          margin: "15px 0",
+          color: "#94a3b8",
+          gap: "12px"
+        }}>
+          <div className="spinner" style={{
+            width: "20px",
+            height: "20px",
+            border: "3px solid rgba(255,255,255,0.1)",
+            borderTop: "3px solid #6366f1",
+            borderRadius: "50%",
+            animation: "spin 1s linear infinite"
+          }}></div>
+          <span>Synchronizing live database records...</span>
+        </div>
+      )}
+
+      {authError && (
+        <div className="error-banner" style={{
+          padding: "15px",
+          background: "rgba(239, 68, 68, 0.1)",
+          backdropFilter: "blur(8px)",
+          color: "#f87171",
+          border: "1px solid rgba(239, 68, 68, 0.2)",
+          borderRadius: "12px",
+          margin: "15px 0",
+          fontSize: "14px"
+        }}>
+          ⚠️ Database Sync Issue: {authError}
+        </div>
+      )}
+
       {/* Admin Header */}
       <div className="dashboard-banner admin-banner">
         <div className="banner-text">

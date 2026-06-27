@@ -1352,6 +1352,416 @@ app.post("/api/bookings/cancel", requireAuth, (req, res) => {
   });
 });
 
+// =========================================================================
+// PHASE 4: AI TEST Q&A GENERATOR™ ENDPOINTS
+// =========================================================================
+const practiceTestsDb = [];
+
+// GET: Retrieve all practice tests (local in-memory registry)
+app.get("/api/ai/practice-tests", requireAuth, (req, res) => {
+  const { studentId, tutorId } = req.query;
+  let filtered = practiceTestsDb;
+  
+  if (studentId) {
+    filtered = filtered.filter(t => t.studentId === studentId);
+  }
+  if (tutorId) {
+    filtered = filtered.filter(t => t.tutorId === tutorId);
+  }
+  
+  res.json({ status: "Success", practiceTests: filtered });
+});
+
+// POST: Save practice test to local memory registry (offline fallback)
+app.post("/api/ai/practice-tests", requireAuth, requireRole(["Tutor", "Admin"]), (req, res) => {
+  const { studentId, tutorId, title, subject, topic, gradeLevel, difficulty, config, content } = req.body;
+  
+  if (!title || !subject || !topic || !content) {
+    return res.status(400).json({ error: "Missing required practice test fields." });
+  }
+
+  const newTest = {
+    id: "test_" + Math.random().toString(36).substr(2, 9),
+    studentId: studentId || null,
+    tutorId: tutorId || req.user.id || "tut_1",
+    title,
+    subject,
+    topic,
+    gradeLevel,
+    difficulty,
+    config: config || {},
+    content,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  practiceTestsDb.push(newTest);
+  console.log(`[Database] Practice test "${title}" saved to offline in-memory registry.`);
+  res.json({ status: "Success", practiceTest: newTest });
+});
+
+// POST: AI Test Generator Endpoint
+app.post("/api/ai/generate-test", requireAuth, requireRole(["Tutor", "Admin"]), async (req, res) => {
+  const { 
+    studentId, 
+    gradeLevel = "9th Grade", 
+    subject, 
+    topic, 
+    difficulty = "Medium", 
+    questionCount = 3, 
+    questionType = "Multiple Choice", 
+    includeSolutions = true, 
+    includeAnswerKey = true 
+  } = req.body;
+
+  if (!subject || !topic) {
+    return res.status(400).json({ error: "Subject and Topic are required fields to generate a test." });
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY || process.env.AI_API_KEY;
+  const isAiEnabled = apiKey && !apiKey.includes("PLACEHOLDER") && apiKey.trim().length > 10;
+
+  if (isAiEnabled) {
+    console.log(`[AI Test Engine] Calling Live Gemini AI for Subject: ${subject}, Topic: ${topic}, Difficulty: ${difficulty}`);
+    
+    // Prompt crafting matching Phase 4 strict constraints
+    const systemInstruction = `You are Ambience Test Q&A Generator™, an elite, corporate-grade pedagogical AI engine designed to generate premium academic assessments.
+Your task is to generate a comprehensive, highly accurate practice test in JSON format based on the user's parameters.
+The output MUST be a single, valid JSON object matching this structure:
+{
+  "title": "String - Highly premium, professional title for the test matching the subject/grade",
+  "questions": [
+    {
+      "id": 1,
+      "question": "String - Clear, rigorous question content",
+      "options": ["String", "String", "String", "String"], // Include ONLY if questionType is 'Multiple Choice', else null or empty
+      "hint": "String - Extremely encouraging, student-friendly, and non-giving hint",
+      "answer": "String - Clear final answer key (e.g. 'Option A: ...' or detailed short answer)",
+      "solution": "String - Deep, step-by-step pedagogical solution and explanation",
+      "common_mistakes": "String - Analytical overview of common student mistakes for this concept",
+      "teacher_notes": "String - Professional teaching tips, learning objectives, or educational context"
+    }
+  ]
+}
+
+Subject-specific constraints:
+- Mathematics (K-12 Math, Algebra, Pre-Calculus, Calculus, Statistics, SAT, ACT, EOG, IOWA): Include rigorous, detailed step-by-step numerical equations, formula applications, and algebraic proofs in 'solution'.
+- Science: Include step-by-step quantitative solutions for physics/chemistry math, or comprehensive mechanical steps for biological processes.
+- History / Social Studies: Incorporate timeline landmarks, cause-and-effect mappings, and document-based excerpt analysis (DBQ) in 'question' and 'solution'.
+- English / Language Arts: Include reading comprehension excerpts, grammatical corrections, analytical writing prompts, and vocabulary context keys.
+- Bible Study: Include scripture-based reflections, memory verse review checklists, and character application context emphasizing virtues like Integrity, Responsibility, Kindness, and Perseverance.
+- Computer / Technology: Provide clean, formatted coding snippets (Python, JavaScript, HTML, CSS), digital literacy prompts, AI literacy, or cybersecurity fundamentals.
+- Physical Education / Health: Feature nutrition/calorie guides, fitness science parameters, sports rules, and healthy habit journals.
+
+Ensure the difficulty matches: ${difficulty}, grade alignment is: ${gradeLevel}, and generate exactly ${questionCount} questions in the format: ${questionType}.
+Do not wrap your output in markdown backticks \`\`\`json. Return ONLY the raw JSON object.`;
+
+    const userPrompt = `Generate a ${questionType} test on the subject of "${subject}", topic "${topic}", grade level "${gradeLevel}", difficulty "${difficulty}" with exactly ${questionCount} questions. Make it highly comprehensive.`;
+
+    try {
+      // Make a direct axios POST call to the Gemini 2.5 Flash API
+      const response = await axios.post(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        {
+          contents: [{ parts: [{ text: userPrompt }] }],
+          systemInstruction: { parts: [{ text: systemInstruction }] },
+          generationConfig: {
+            responseMimeType: "application/json",
+            temperature: 0.3
+          }
+        },
+        { timeout: 15000 }
+      );
+
+      const responseText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (responseText) {
+        const parsedJson = JSON.parse(responseText.trim());
+        return res.json({ status: "Success", source: "GEMINI_API", practiceTest: parsedJson });
+      } else {
+        throw new Error("Empty candidate content from Gemini REST API.");
+      }
+    } catch (aiError) {
+      console.error("[AI Test Engine] Live Gemini API invocation failed. Pivot to Offline Fallback Engine.", aiError.message);
+      // Fall through to offline mock generator
+    }
+  }
+
+  // ==========================================
+  // OFFLINE HIGH-FIDELITY RULE-ENGINE FALLBACK
+  // ==========================================
+  console.log(`[AI Test Engine] Utilizing Offline Fallback Engine for Subject: ${subject}, Topic: ${topic}`);
+
+  // Curated premium database of academic questions mapped across all 11 subject classes
+  const mockDatabase = {
+    "Mathematics": [
+      {
+        topic: "quadratic equations",
+        questions: [
+          {
+            id: 1,
+            question: "Solve the quadratic equation: x² - 5x + 6 = 0 using the factoring method.",
+            options: ["x = 2 or x = 3", "x = -2 or x = -3", "x = 1 or x = 6", "x = -1 or x = -6"],
+            hint: "Find two numbers that multiply to the constant term (+6) and add up to the linear coefficient (-5).",
+            answer: "x = 2 or x = 3",
+            solution: "Step 1: Write down the equation: x² - 5x + 6 = 0.\nStep 2: Identify two factors of +6 that sum to -5. These are -2 and -3 (since -2 * -3 = 6 and -2 + -3 = -5).\nStep 3: Factor the quadratic expression: (x - 2)(x - 3) = 0.\nStep 4: Use the zero product property: Set each binomial to zero:\nx - 2 = 0 => x = 2\nx - 3 = 0 => x = 3.\nTherefore, the solutions are x = 2 or x = 3.",
+            common_mistakes: "Students often misapply the signs, factoring it as (x + 2)(x + 3) = 0, which results in wrong answers x = -2 or x = -3.",
+            teacher_notes: "Focus on verifying the signs of the constant and linear coefficients before factoring. Emphasize checking answers by plugging them back into the original equation."
+          },
+          {
+            id: 2,
+            question: "Find the discriminant of the quadratic equation: 2x² - 4x + 3 = 0 and determine the nature of its roots.",
+            options: ["D = -8 (Two complex conjugate roots)", "D = 8 (Two real distinct roots)", "D = 0 (One real repeated root)", "D = -24 (Two complex conjugate roots)"],
+            hint: "The formula for the discriminant is D = b² - 4ac, where ax² + bx + c = 0.",
+            answer: "D = -8 (Two complex conjugate roots)",
+            solution: "Step 1: Identify coefficients: a = 2, b = -4, c = 3.\nStep 2: Apply discriminant formula: D = b² - 4ac.\nStep 3: Compute: D = (-4)² - 4(2)(3) = 16 - 24 = -8.\nStep 4: Since D < 0, the equation has two complex conjugate roots (non-real).",
+            common_mistakes: "Forgetting that b² is positive regardless of b's sign. Students may compute (-4)² as -16, yielding D = -40.",
+            teacher_notes: "Remind students that the discriminant is the term under the square root in the quadratic formula, hence negative D represents imaginary roots."
+          }
+        ]
+      },
+      {
+        topic: "trigonometric identities",
+        questions: [
+          {
+            id: 1,
+            question: "Simplify the trigonometric expression: sin(x) * csc(x) - cos²(x).",
+            options: ["sin²(x)", "cos²(x)", "tan²(x)", "1"],
+            hint: "Recall that the cosecant function is the reciprocal of the sine function: csc(x) = 1/sin(x).",
+            answer: "sin²(x)",
+            solution: "Step 1: Write expression: sin(x) * csc(x) - cos²(x).\nStep 2: Substitute reciprocal identity: csc(x) = 1 / sin(x).\nStep 3: Simplify first term: sin(x) * (1 / sin(x)) = 1.\nStep 4: Rewrite expression: 1 - cos²(x).\nStep 5: Use Pythagorean identity: sin²(x) + cos²(x) = 1, which implies 1 - cos²(x) = sin²(x).\nFinal answer: sin²(x).",
+            common_mistakes: "Mistaking sin(x) * csc(x) as cos(x) or failing to recognize the algebraic rearrangement of the Pythagorean identity.",
+            teacher_notes: "Scaffold trig substitutions by keeping a list of reciprocal and quotient identities handy for students with IEP adjustments."
+          }
+        ]
+      }
+    ],
+    "Science": [
+      {
+        topic: "photosynthesis",
+        questions: [
+          {
+            id: 1,
+            question: "What is the primary function of the light-dependent reactions during the process of photosynthesis?",
+            options: ["Produce ATP and NADPH to power the Calvin Cycle", "Synthesize glucose molecules directly from CO₂", "Release carbon dioxide into the atmosphere", "Absorb water through root pressure"],
+            hint: "These reactions take place in the thylakoid membranes of chloroplasts and require solar radiation.",
+            answer: "Produce ATP and NADPH to power the Calvin Cycle",
+            solution: "Step 1: Sunlight is absorbed by chlorophyll pigments in thylakoid membranes.\nStep 2: Water molecules are photolyzed (split) into hydrogen ions, electrons, and oxygen gas (released as a byproduct).\nStep 3: Light energy excites electrons, which travel down an electron transport chain.\nStep 4: This process pumps protons to generate ATP via ATP synthase and reduces NADP+ to NADPH.\nStep 5: The chemical energy carriers ATP and NADPH are then exported to the stroma to drive the light-independent reactions (Calvin Cycle).",
+            common_mistakes: "Believing glucose is synthesized directly during the light-dependent phase, whereas it is actually synthesized in the Calvin Cycle.",
+            teacher_notes: "Incorporate diagrams of a chloroplast stroma and thylakoid membrane to help visual learners coordinate these separate stages."
+          }
+        ]
+      }
+    ],
+    "History / Social Studies": [
+      {
+        topic: "american revolution",
+        questions: [
+          {
+            id: 1,
+            question: "Analyze the cause-and-effect of the Stamp Act of 1765. Which of the following best maps the sequence of historical friction?",
+            options: ["British debt from French & Indian War -> Stamp Act taxes -> Colonial protests & Boycotts -> Stamp Act Repealed with Declaratory Act", "Colonial tea boycotts -> Boston Tea Party -> Stamp Act Coercion -> Revolutionary War begins", "French alliances -> Stamp Act taxes -> Battle of Saratoga -> Treaty of Paris signing", "Invention of the cotton gin -> Stamp Act -> Southern agrarian boycotts -> Articles of Confederation"],
+            hint: "Consider the consequences of the Seven Years' War and the financial burden placed on the British treasury.",
+            answer: "British debt from French & Indian War -> Stamp Act taxes -> Colonial protests & Boycotts -> Stamp Act Repealed with Declaratory Act",
+            solution: "Step 1: Timeline Landmark: Under King George III, Britain concludes French & Indian War (1763) with massive national debt.\nStep 2: Cause: Parliament passes Stamp Act (1765) asserting authority to tax all printed materials directly.\nStep 3: Reaction: Sons of Liberty protest with 'No Taxation Without Representation' and coordinate merchant boycotts.\nStep 4: Outcome: Parliament repeals the Stamp Act in 1766 due to economic pressure, but simultaneously passes the Declaratory Act, claiming absolute power over colonies.",
+            common_mistakes: "Confusing the Stamp Act with the Townshend Acts or the Intolerable Acts which occurred later.",
+            teacher_notes: "Use this cause-and-effect mapping as a blueprint for Document-Based Questions (DBQs). Encourage students to evaluate merchant letters from Boston in 1766."
+          }
+        ]
+      }
+    ],
+    "English / Language Arts": [
+      {
+        topic: "reading comprehension",
+        questions: [
+          {
+            id: 1,
+            question: "Read the excerpt: 'The old oak tree stood sentinel at the crest of the hill, its gnarled roots clawing the earth like fingers grasping a treasure.' Which literary device is primary in this sentence, and what does it suggest?",
+            options: ["Personification; it portrays the oak tree as a living guardian with human characteristics", "Hyperbole; it exaggerates the physical age of the woodland forest", "Alliteration; it repeats the 'o' vowels to slow the reader's rhythmic pacing", "Irony; it highlights the environmental damage caused by agrarian growth"],
+            hint: "Look for terms like 'sentinel' (guard) and physical descriptors such as 'clawing like fingers'.",
+            answer: "Personification; it portrays the oak tree as a living guardian with human characteristics",
+            solution: "Step 1: Identify key descriptors: 'stood sentinel' and 'roots clawing like fingers'.\nStep 2: A 'sentinel' is a soldier or guard (human role), and 'clawing fingers' are human actions applied to an inanimate oak.\nStep 3: This attribution of human traits to an object is Personification.\nStep 4: It symbolically establishes the tree as an active protector of the landscape.",
+            common_mistakes: "Mistaking personification for simple metaphor or failing to recognize 'sentinel' as a human agency.",
+            teacher_notes: "Great for scaffolding descriptive writing. Ask students to write down five inanimate objects and assign them active, human professions."
+          }
+        ]
+      }
+    ],
+    "Bible Study": [
+      {
+        topic: "fruits of the spirit",
+        questions: [
+          {
+            id: 1,
+            question: "According to Galatians 5:22-23, which list represents the scriptural Fruits of the Spirit, and how is 'Perseverance' represented in the modern virtue character context?",
+            options: ["Love, joy, peace, patience, kindness, goodness, faithfulness, gentleness, self-control; Patience translates directly to long-suffering and perseverance under trial", "Faith, hope, charity, courage, prudence, justice, temperance, wisdom; perseverance is courage in prayer", "Prayer, fasting, giving, humility, scripture memorization, assembly; perseverance is regular tithing", "Repentance, water baptism, laying of hands, healing, prophecy, tongues; perseverance is continuous speaking"],
+            hint: "Read Galatians 5:22-23. Think of how patience, goodness, and self-control support perseverance in academic and life obstacles.",
+            answer: "Love, joy, peace, patience, kindness, goodness, faithfulness, gentleness, self-control; Patience translates directly to long-suffering and perseverance under trial",
+            solution: "Step 1: Locate Galatians 5:22-23: 'But the fruit of the Spirit is love, joy, peace, forbearance (patience), kindness, goodness, faithfulness, gentleness and self-control.'\nStep 2: Analyze virtue translation: 'Forbearance' or patience is the ability to endure hardships calmly and faithfully without giving up.\nStep 3: In the Ambience Character Education model, this supports academic Perseverance—completing difficult topics with a joyful, resilient spirit, honoring God with our work.",
+            common_mistakes: "Substituting theological concepts like 'wisdom' or general 'faith' for the specific list of fruits outlined in Galatians.",
+            teacher_notes: "Integrate character application by discussing a situation where a student needed 'self-control' (restraining anger) or 'patience' (handling a tough math assignment)."
+          }
+        ]
+      }
+    ],
+    "Computer / Technology": [
+      {
+        topic: "coding basics",
+        questions: [
+          {
+            id: 1,
+            question: "Study the Python code snippet:\n```python\ndef calculate_sum(n):\n    total = 0\n    for i in range(1, n + 1):\n        if i % 2 == 0:\n            total += i\n    return total\nprint(calculate_sum(5))\n```\nWhat is the output when this script executes?",
+            options: ["6", "15", "12", "0"],
+            hint: "Trace the loop for i from 1 up to 5. Check which values are even (i % 2 == 0) and sum them.",
+            answer: "6",
+            solution: "Step 1: Understand the parameters: n = 5.\nStep 2: Loop range(1, 6) produces sequence: 1, 2, 3, 4, 5.\nStep 3: Apply condition 'i % 2 == 0' (checks if even):\n- i = 1: 1%2 != 0 (Skip)\n- i = 2: 2%2 == 0 => total += 2 (total is now 2)\n- i = 3: 3%2 != 0 (Skip)\n- i = 4: 4%2 == 0 => total += 4 (total is now 6)\n- i = 5: 5%2 != 0 (Skip)\nStep 4: Function returns total = 6.\nPrint output: 6.",
+            common_mistakes: "Assuming range(1, 5) excludes 5, or summing all integers (1+2+3+4+5=15) instead of filtering for even numbers.",
+            teacher_notes: "Use print-tracing exercises to help students visualize loop executions. Highly recommended for strengthening computer science literacy."
+          }
+        ]
+      }
+    ],
+    "Physical Education / Health": [
+      {
+        topic: "nutrition and wellness",
+        questions: [
+          {
+            id: 1,
+            question: "Which of the following describes the biological role of macronutrients and the importance of hydration for physical performance?",
+            options: ["Carbohydrates supply immediate ATP energy; proteins support muscle tissue repair; fats support hormone synthesis; hydration regulates heat stress and joint lubrication", "Vitamins promote bone structure directly; carbohydrates convert to sodium; fats block blood vessels; hydration builds muscles", "Minerals are primary energy producers; proteins digest carbohydrates; fats hydrate liver tissues; water is a source of direct protein", "Calories are microscopic cells; hydration blocks perspiration; proteins carry minerals; water supplies fat storage"],
+            hint: "Think about the primary fuel source for workouts (carbs), building blocks (protein), and thermo-regulation (water).",
+            answer: "Carbohydrates supply immediate ATP energy; proteins support muscle tissue repair; fats support hormone synthesis; hydration regulates heat stress and joint lubrication",
+            solution: "Step 1: Identify three major macronutrients: Carbohydrates, Proteins, and Lipids (Fats).\nStep 2: Map Carbohydrates to primary glycogen/glucose stores providing fuel for cells.\nStep 3: Map Proteins to amino-acid building blocks repairing muscle micro-tears from workouts.\nStep 4: Map Fats to long-term cellular energy and vital hormone synthesis.\nStep 5: Detail Hydration: Sweat loss cools the body during cardiovascular exertion. Water prevents cramps, joint grinding, and metabolic fatigue.",
+            common_mistakes: "Students often categorize fats as purely harmful, forgetting that essential fatty acids are mandatory for hormone regulation and brain health.",
+            teacher_notes: "Promote healthy lifestyle habits. Encourage students to keep a daily food-and-water log, tracing carbohydrate vs protein ratios."
+          }
+        ]
+      }
+    ]
+  };
+
+  // Safe categorization matching
+  let normalizedSubject = subject;
+  if (["K-12 Math", "Algebra", "Pre-Calculus", "Calculus", "Statistics", "SAT", "ACT", "EOG", "IOWA"].some(m => subject.includes(m)) || subject.toLowerCase().includes("math")) {
+    normalizedSubject = "Mathematics";
+  } else if (subject.toLowerCase().includes("science")) {
+    normalizedSubject = "Science";
+  } else if (subject.toLowerCase().includes("history") || subject.toLowerCase().includes("social")) {
+    normalizedSubject = "History / Social Studies";
+  } else if (subject.toLowerCase().includes("english") || subject.toLowerCase().includes("language") || subject.toLowerCase().includes("reading")) {
+    normalizedSubject = "English / Language Arts";
+  } else if (subject.toLowerCase().includes("bible") || subject.toLowerCase().includes("scripture")) {
+    normalizedSubject = "Bible Study";
+  } else if (subject.toLowerCase().includes("computer") || subject.toLowerCase().includes("tech") || subject.toLowerCase().includes("code")) {
+    normalizedSubject = "Computer / Technology";
+  } else if (subject.toLowerCase().includes("physical") || subject.toLowerCase().includes("health") || subject.toLowerCase().includes("wellness")) {
+    normalizedSubject = "Physical Education / Health";
+  }
+
+  // Attempt to load questions from database
+  let chosenCategory = mockDatabase[normalizedSubject] || mockDatabase["Mathematics"];
+  let matchedTopic = chosenCategory.find(item => topic.toLowerCase().includes(item.topic) || item.topic.includes(topic.toLowerCase()));
+  
+  let questionsPool = matchedTopic ? matchedTopic.questions : null;
+
+  // Dynamic Generator if no exact topic is matched or if more questions are requested than pool size
+  if (!questionsPool) {
+    console.log(`[AI Test Engine] Topic "${topic}" not found in offline DB. Triggering Dynamic Adaptation Engine...`);
+    questionsPool = [];
+    
+    for (let i = 1; i <= questionCount; i++) {
+      let q = "", ans = "", sol = "", hint = "", mistakes = "", notes = "", opts = null;
+
+      if (normalizedSubject === "Mathematics") {
+        q = `Solve the following high-tier mathematical challenge on ${topic} (${difficulty} difficulty): Find the value of 'x' when 3x + 12 = 5x - 8.`;
+        opts = ["x = 10", "x = 4", "x = -10", "x = 2"];
+        ans = "x = 10";
+        hint = "Isolate the variable x on one side of the equation by subtracting 3x from both sides.";
+        sol = `Step 1: Write down the original equation: 3x + 12 = 5x - 8.\nStep 2: Subtract 3x from both sides to gather terms: 12 = 2x - 8.\nStep 3: Add 8 to both sides to isolate the variable term: 20 = 2x.\nStep 4: Divide both sides by 2: x = 10.\nCheck: 3(10) + 12 = 42; 5(10) - 8 = 42. Verified!`;
+        mistakes = "Subtracting rather than adding 8, leading to 2x = 4, or x = 2.";
+        notes = "This question models fundamental linear manipulation. Emphasize verification of equations for all grade levels.";
+      } else if (normalizedSubject === "Science") {
+        q = `Analyze a core concept of "${topic}": Explain the conservation of mass/energy or core biological mechanics involved.`;
+        opts = ["Reactants mass equals products mass", "Mass is destroyed during reactions", "Energy is entirely consumed", "Temperature drops to absolute zero"];
+        ans = "Reactants mass equals products mass";
+        hint = "In a closed system, matter can neither be created nor destroyed—only rearranged.";
+        sol = `Step 1: Define the system parameters for ${topic}.\nStep 2: Identify chemical or physical inputs and outputs.\nStep 3: Apply the Law of Conservation of Mass/Energy. Sum of input weights must equal output weights.\nStep 4: Conclude that total mass remains invariant before and after the reaction.`;
+        mistakes = "Believing that gas escape reduces total mass, forgetting to include gas mass in equations.";
+        notes = "Focus on teaching students to track all inputs in chemical/physical systems. Great for general scientific inquiry.";
+      } else if (normalizedSubject === "History / Social Studies") {
+        q = `Identify a primary timeline milestone, cause/effect relationship, or document-based context for: "${topic}".`;
+        opts = ["Catalyzed massive social, political, and institutional reform", "Had no measurable impact on global trade", "Was immediately forgotten within a year", "Was isolated to small uninhabited islands"];
+        ans = "Catalyzed massive social, political, and institutional reform";
+        hint = "Think about how this historical event changed the political or social map for future generations.";
+        sol = `Step 1: Historical Timeline Context: Trace the root socio-political conditions leading up to ${topic}.\nStep 2: Primary Cause: Map immediate instigating incidents (e.g. protests, tax laws, economic blockades).\nStep 3: Intermediate Effect: Describe structural conflicts, revolutions, or legislative adjustments.\nStep 4: Long-Term Legacy: Analyze structural shifts in governance, liberty, or regional alliances.`;
+        mistakes = "Confusing chronological ordering of events or applying modern values to historical figures out of context.";
+        notes = "Perfect template for Document-Based Questions (DBQs). Ask students to cross-reference multiple direct historical sources.";
+      } else if (normalizedSubject === "English / Language Arts") {
+        q = `Read the sentence: "Despite the inclement weather, the team completed their rigorous training itinerary with unwavering resolve." What does "inclement" mean in this vocabulary context, and how does it affect the tone?`;
+        opts = ["Harsh and severe; it highlights the team's grit", "Warm and sunny; it suggests a relaxing environment", "Unpredictable but pleasant; it suggests lighthearted fun", "Dry and barren; it implies agricultural struggles"];
+        ans = "Harsh and severe; it highlights the team's grit";
+        hint = "The sentence uses 'Despite' and 'unwavering resolve', indicating the weather was an obstacle.";
+        sol = `Step 1: Extract context clues: 'Despite', 'rigorous training', 'unwavering resolve'.\nStep 2: Recognize that the weather must have been a negative factor, posing a hurdle.\nStep 3: 'Inclement' relates to stormy, cold, or harsh atmospheric conditions.\nStep 4: Synthesize: Harsh weather highlights and exaggerates the team's perseverance.`;
+        mistakes = "Confusing 'inclement' with 'climatized' or selecting pleasant weather options due to poor contextual tracing.";
+        notes = "Reinforces textual context tracing. Encourage students to replace unknown terms with general category words to infer meaning.";
+      } else if (normalizedSubject === "Bible Study") {
+        q = `Reflect on the biblical virtue application regarding: "${topic}". What scripture context coordinates this moral, and how does it apply to daily character?`;
+        opts = ["Encourages active stewardship, integrity, and honor", "Is entirely theoretical and isolated from actions", "Suggests pursuing purely personal ambition", "Recommends avoiding all community service"];
+        ans = "Encourages active stewardship, integrity, and honor";
+        hint = "Consider how displaying love, responsibility, and honest behavior pleases God and serves those around us.";
+        sol = `Step 1: Identify biblical anchors linked to "${topic}".\nStep 2: Read scripture-based warnings or commands on this moral virtue.\nStep 3: Analyze character application: Apply these parameters to schoolwork, parent interactions, and community roles.\nStep 4: Conclude: A faithful heart displays integrity even in small daily duties.`;
+        mistakes = "Failing to connect biblical theology to practical, daily actions and decisions.";
+        notes = "Focus on practical character application (Soli Deo Gloria). Perfect for cultivating young ambassadors with honest hearts.";
+      } else if (normalizedSubject === "Computer / Technology") {
+        q = `Which of the following describes a foundational computer science parameter or digital literacy basic for "${topic}"?`;
+        opts = ["Ensures secure, efficient, and modular execution", "Requires deleting the operating system", "Is purely physical with no logical rules", "Has been replaced entirely by simple typewriter mechanics"];
+        ans = "Ensures secure, efficient, and modular execution";
+        hint = "Look for computer safety, code readability, or logic variables that prevent cyber risks.";
+        sol = `Step 1: Understand code design or security parameters for ${topic}.\nStep 2: Trace logic variables sequentially (e.g. encryption, variable scopes, loop counters).\nStep 3: Identify structural boundaries preventing performance failures or cyber leaks.\nStep 4: Formulate a clean, modular optimization.`;
+        mistakes = "Failing to validate input lengths, or ignoring variable initialization before execution loops.";
+        notes = "Builds tech literacy. Explain basic programming concepts or security hygiene habits to encourage future engineers.";
+      } else {
+        q = `Wellness & Safety Review: Explain the optimal wellness, safety, or fitness habit parameters associated with "${topic}".`;
+        opts = ["Promotes balanced nutrition, athletic safety, and positive habits", "Recommends high sugar consumption and zero sleep", "Suggests avoiding warm-ups before sprints", "Promotes dehydration during long exercises"];
+        ans = "Promotes balanced nutrition, athletic safety, and positive habits";
+        hint = "Optimal performance relies on muscle rest, hydration, nutrition, and safety boundaries.";
+        sol = `Step 1: Isolate health or fitness goals for "${topic}".\nStep 2: Detail physical warm-ups, dietary safety, and protective sports gear.\nStep 3: Incorporate daily hydration and balanced nutritional calorie intake boundaries.\nStep 4: Encourage mental wellness through consistent sleep schedules.`;
+        mistakes = "Over-exertion without prior warm-ups, or disregarding hydration guidelines during heat stress.";
+        notes = "Cultivates lifetime healthy habits. Discuss fitness parameters alongside character goals (perseverance in wellness).";
+      }
+
+      questionsPool.push({
+        id: i,
+        question: q,
+        options: questionType === "Multiple Choice" ? opts : null,
+        hint,
+        answer: ans,
+        solution: includeSolutions ? sol : "Solution details are disabled by tutor configurations.",
+        common_mistakes: mistakes,
+        teacher_notes: notes
+      });
+    }
+  }
+
+  // Ensure count aligns exactly to questionCount parameter
+  const finalQuestions = questionsPool.slice(0, questionCount);
+
+  // Generate gorgeous test title
+  let generatedTitle = `${gradeLevel} ${subject} - ${topic.charAt(0).toUpperCase() + topic.slice(1)} Practice Assessment`;
+  if (subject === "SAT" || subject === "ACT" || subject === "EOG" || subject === "IOWA") {
+    generatedTitle = `Official Mock ${subject} - ${topic.charAt(0).toUpperCase() + topic.slice(1)} Diagnostics (${difficulty})`;
+  }
+
+  const generatedTest = {
+    title: generatedTitle,
+    questions: finalQuestions
+  };
+
+  res.json({ 
+    status: "Success", 
+    source: "OFFLINE_DEMO_ENGINE", 
+    practiceTest: generatedTest 
+  });
+});
 
 // =========================================================================
 // START THE MULTI-TENANT ENTERPRISE PORT

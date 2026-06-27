@@ -23,6 +23,9 @@ export const AppProvider = ({ children }) => {
   const [isLoggedIn, setIsLoggedIn] = useState(false); // Controls whether private dashboards or login screen are visible
   const [session, setSession] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
+  const [currentProfile, setCurrentProfile] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [authError, setAuthError] = useState(null);
 
   // Application Data States (Simulated local DB or populated live from Supabase)
   const [tutors, setTutors] = useState(INITIAL_TUTORS);
@@ -33,6 +36,7 @@ export const AppProvider = ({ children }) => {
   const [sessionNotes, setSessionNotes] = useState(INITIAL_SESSION_NOTES);
   const [bookings, setBookings] = useState(INITIAL_BOOKINGS);
   const [characterNotes, setCharacterNotes] = useState(INITIAL_CHARACTER_NOTES);
+  const [practiceTests, setPracticeTests] = useState([]);
 
   // Live Zoom Integration States
   const [tutorZoomStatus, setTutorZoomStatus] = useState("Not Connected"); // Connected, Not Connected, Reconnect Required
@@ -44,6 +48,8 @@ export const AppProvider = ({ children }) => {
 
   // Method to fetch all tables from Supabase and map them to local states
   const fetchLiveDatabaseData = async (user) => {
+    setIsLoading(true);
+    setAuthError(null);
     try {
       console.log("[Supabase Sync] Fetching live multi-tenant data for user:", user.email);
 
@@ -56,6 +62,7 @@ export const AppProvider = ({ children }) => {
 
       if (profileErr) throw profileErr;
 
+      setCurrentProfile(profile);
       setUserRole(profile.role);
       setIsLoggedIn(true);
 
@@ -108,6 +115,7 @@ export const AppProvider = ({ children }) => {
 
           return {
             id: s.id,
+            parentId: s.parent_id,
             name: s.profiles?.name || "Student Name",
             grade: s.grade,
             parentName: "Grace Sterling", // mapped for demo integrity
@@ -251,8 +259,35 @@ export const AppProvider = ({ children }) => {
         }));
         setInvoices(formattedInvs);
       }
+
+      // J. Fetch Practice Tests
+      const { data: dbTests, error: testsErr } = await supabase
+        .from("practice_tests")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (!testsErr && dbTests) {
+        const formattedTests = dbTests.map((t) => ({
+          id: t.id,
+          studentId: t.student_id,
+          tutorId: t.tutor_id,
+          title: t.title,
+          subject: t.subject,
+          topic: t.topic,
+          gradeLevel: t.grade_level,
+          difficulty: t.difficulty,
+          config: t.config,
+          content: t.content,
+          createdAt: t.created_at,
+          updatedAt: t.updated_at
+        }));
+        setPracticeTests(formattedTests);
+      }
     } catch (err) {
       console.error("[Supabase Sync] Error during database sync:", err.message);
+      setAuthError(err.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -282,6 +317,7 @@ export const AppProvider = ({ children }) => {
       }
     };
     fetchZoomStatus();
+    fetchPracticeTests();
 
     // Supabase auth subscription and state sync
     if (isSupabaseConfigured()) {
@@ -309,6 +345,43 @@ export const AppProvider = ({ children }) => {
       return () => subscription.unsubscribe();
     }
   }, []);
+
+  // Set mock profile in Sandbox Mode when logged in or role changes
+  useEffect(() => {
+    if (!isSupabaseConfigured() && isLoggedIn) {
+      if (userRole === "Student") {
+        setCurrentProfile({
+          name: "Caleb Sterling",
+          email: "student.caleb@ambience.com",
+          role: "Student",
+          avatar_url: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&q=80&w=200"
+        });
+      } else if (userRole === "Parent") {
+        setCurrentProfile({
+          name: "Grace Sterling",
+          email: "parent.grace@ambience.com",
+          role: "Parent",
+          avatar_url: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200"
+        });
+      } else if (userRole === "Tutor") {
+        setCurrentProfile({
+          name: "Mrs. Sarah Jenkins",
+          email: "tutor.sarah@ambience.com",
+          role: "Tutor",
+          avatar_url: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=200"
+        });
+      } else if (userRole === "Admin") {
+        setCurrentProfile({
+          name: "Admin Director",
+          email: "admin@ambience.com",
+          role: "Admin",
+          avatar_url: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=200"
+        });
+      }
+    } else if (!isLoggedIn) {
+      setCurrentProfile(null);
+    }
+  }, [isLoggedIn, userRole]);
 
   // Auth Operations
   const signUpUser = async (email, password, name, role) => {
@@ -1573,6 +1646,111 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  // Phase 4: Practice Tests / AI Test Generator Helpers
+  const fetchPracticeTests = async () => {
+    if (isSupabaseConfigured() && currentUser) {
+      try {
+        const { data, error } = await supabase
+          .from("practice_tests")
+          .select("*")
+          .order("created_at", { ascending: false });
+        if (!error && data) {
+          const formatted = data.map((t) => ({
+            id: t.id,
+            studentId: t.student_id,
+            tutorId: t.tutor_id,
+            title: t.title,
+            subject: t.subject,
+            topic: t.topic,
+            gradeLevel: t.grade_level,
+            difficulty: t.difficulty,
+            config: t.config,
+            content: t.content,
+            createdAt: t.created_at,
+            updatedAt: t.updated_at
+          }));
+          setPracticeTests(formatted);
+        }
+      } catch (err) {
+        console.error("[Database] Error loading practice tests:", err);
+      }
+    } else {
+      try {
+        const res = await apiFetch("http://localhost:5000/api/ai/practice-tests");
+        const data = await res.json();
+        if (data.status === "Success" && data.practiceTests) {
+          setPracticeTests(data.practiceTests);
+        }
+      } catch (err) {
+        console.log("[Offline DB] Express server is offline; keeping local in-memory practice tests.");
+      }
+    }
+  };
+
+  const addPracticeTest = async (studentId, title, subject, topic, gradeLevel, difficulty, config, content) => {
+    if (isSupabaseConfigured() && currentUser) {
+      try {
+        const { error } = await supabase.from("practice_tests").insert({
+          student_id: studentId || null,
+          tutor_id: currentUser.id,
+          title,
+          subject,
+          topic,
+          grade_level: gradeLevel,
+          difficulty,
+          config,
+          content
+        });
+        if (error) throw error;
+        await fetchLiveDatabaseData(currentUser);
+        return true;
+      } catch (err) {
+        console.error("[Database] Error inserting practice test:", err);
+        return false;
+      }
+    } else {
+      try {
+        const res = await apiFetch("http://localhost:5000/api/ai/practice-tests", {
+          method: "POST",
+          body: JSON.stringify({
+            studentId,
+            tutorId: currentUser?.id || "tut_1",
+            title,
+            subject,
+            topic,
+            gradeLevel,
+            difficulty,
+            config,
+            content
+          })
+        });
+        const data = await res.json();
+        if (data.status === "Success") {
+          await fetchPracticeTests();
+          return true;
+        }
+      } catch (err) {
+        console.error("[Offline DB] Error saving practice test via API:", err);
+        const newTest = {
+          id: `test_${Date.now()}`,
+          studentId: studentId || null,
+          tutorId: currentUser?.id || "tut_1",
+          title,
+          subject,
+          topic,
+          gradeLevel,
+          difficulty,
+          config,
+          content,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        setPracticeTests((prev) => [newTest, ...prev]);
+        return true;
+      }
+    }
+  };
+
   const apiFetch = async (url, options = {}) => {
     const headers = { ...(options.headers || {}) };
     
@@ -1626,7 +1804,10 @@ export const AppProvider = ({ children }) => {
         sessionNotes,
         bookings,
         setBookings,
-        characterNotes,
+         characterNotes,
+        practiceTests,
+        fetchPracticeTests,
+        addPracticeTest,
         tutorZoomStatus,
         setTutorZoomStatus,
         tutorManualZoomLink,
@@ -1668,7 +1849,13 @@ export const AppProvider = ({ children }) => {
         resetUserPassword,
         updateUserPassword,
         currentUser,
-        session
+        session,
+        currentProfile,
+        setCurrentProfile,
+        isLoading,
+        setIsLoading,
+        authError,
+        setAuthError
       }}
     >
       {children}

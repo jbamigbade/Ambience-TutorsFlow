@@ -36,11 +36,14 @@ export default function ParentDashboard() {
     tutors,
     characterNotes,
     addParentEncouragement,
-    apiFetch
+    apiFetch,
+    currentProfile,
+    isLoading,
+    authError
   } = useContext(AppContext);
 
-  // Focus on parent Grace Sterling, whose child is Caleb Sterling
-  const student = students.find((s) => s.id === "std_1") || students[0];
+  // Focus on student linked to parent profile or fallback to demo student Caleb Sterling
+  const student = students.find((s) => s.parentId === currentProfile?.id) || students.find((s) => s.id === "std_1") || students[0];
   const studentBookings = (bookings || []).filter((bk) => bk.studentName === student.name);
 
   const [activeSubTab, setActiveSubTab] = useState("Overview"); // Overview, Character, Attendance, Reports, Chat, Billing
@@ -328,18 +331,59 @@ export default function ParentDashboard() {
   return (
     <div className="dashboard-content animate-fade-in">
       
+      {isLoading && (
+        <div className="loading-spinner-overlay" style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "15px 20px",
+          background: "rgba(30, 41, 59, 0.4)",
+          backdropFilter: "blur(12px)",
+          borderRadius: "12px",
+          border: "1px solid rgba(255, 255, 255, 0.08)",
+          margin: "15px 0",
+          color: "#94a3b8",
+          gap: "12px"
+        }}>
+          <div className="spinner" style={{
+            width: "20px",
+            height: "20px",
+            border: "3px solid rgba(255,255,255,0.1)",
+            borderTop: "3px solid #6366f1",
+            borderRadius: "50%",
+            animation: "spin 1s linear infinite"
+          }}></div>
+          <span>Synchronizing live database records...</span>
+        </div>
+      )}
+
+      {authError && (
+        <div className="error-banner" style={{
+          padding: "15px",
+          background: "rgba(239, 68, 68, 0.1)",
+          backdropFilter: "blur(8px)",
+          color: "#f87171",
+          border: "1px solid rgba(239, 68, 68, 0.2)",
+          borderRadius: "12px",
+          margin: "15px 0",
+          fontSize: "14px"
+        }}>
+          ⚠️ Database Sync Issue: {authError}
+        </div>
+      )}
+
       {/* Parent Portal welcome bar */}
       <div className="dashboard-banner parent-banner">
         <div className="banner-text">
           <span className="banner-badge">PARENT PORTAL</span>
-          <h1>Welcome Back, Grace Sterling!</h1>
+          <h1>Welcome Back, {currentProfile?.name || "Grace Sterling"}!</h1>
           <p>
             Stay engaged with your student's learning roadmap. Thank you for your partnership!
           </p>
         </div>
         <div className="parent-student-link-badge">
           <span>Student Linked:</span>
-          <strong>🎓 Caleb Sterling (11th)</strong>
+          <strong>🎓 {student?.name || "Caleb Sterling"} ({student?.grade || "11th"})</strong>
         </div>
       </div>
 

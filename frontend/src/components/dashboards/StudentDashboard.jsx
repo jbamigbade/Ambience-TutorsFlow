@@ -29,11 +29,15 @@ export default function StudentDashboard() {
     addStudentReflection,
     updateCharacterGoals,
     CHARACTER_BADGES,
-    awardPoints
+    awardPoints,
+    currentProfile,
+    isLoading,
+    authError,
+    practiceTests
   } = useContext(AppContext);
 
-  // Focus on the demo student, Caleb Sterling
-  const student = students.find((s) => s.id === "std_1") || students[0];
+  // Focus on the student linked to active profile, or fallback to first student
+  const student = students.find((s) => s.id === currentProfile?.id) || students[0];
   const levelData = getLevelInfo(student.points);
 
   // Filter assignments & bookings for this student
@@ -55,6 +59,14 @@ export default function StudentDashboard() {
   const [satSelectedAns, setSatSelectedAns] = useState(null);
   const [satQuizSubmitted, setSatQuizSubmitted] = useState(false);
   const [satQuizIsCorrect, setSatQuizIsCorrect] = useState(false);
+  
+  // Dynamic Practice Test Workspace States
+  const [activePracticeTest, setActivePracticeTest] = useState(null);
+  const [studentAnswers, setStudentAnswers] = useState({}); // { questionIndex: choice }
+  const [expandedHints, setExpandedHints] = useState({}); // { questionIndex: true/false }
+  const [checkedAnswers, setCheckedAnswers] = useState({}); // { questionIndex: { isCorrect, submitted } }
+  const [testScore, setTestScore] = useState(null); // { correct, total }
+  const [completedTests, setCompletedTests] = useState({}); // { testId: scoreText }
   const [iepChecklist, setIepChecklist] = useState([
     { id: "iep_1", task: "Log into TutorsFlow & check weekly character theme", completed: true },
     { id: "iep_2", task: "Review trigonometry double-angle formulas checklist", completed: false },
@@ -109,8 +121,110 @@ export default function StudentDashboard() {
     }
   };
 
+  // Dynamic Practice Test handlers
+  const handleStartPracticeTest = (test) => {
+    setActivePracticeTest(test);
+    setStudentAnswers({});
+    setExpandedHints({});
+    setCheckedAnswers({});
+    setTestScore(null);
+  };
+
+  const handleSelectAnswer = (qIndex, choice) => {
+    setStudentAnswers((prev) => ({
+      ...prev,
+      [qIndex]: choice
+    }));
+  };
+
+  const handleToggleHint = (qIndex) => {
+    setExpandedHints((prev) => ({
+      ...prev,
+      [qIndex]: !prev[qIndex]
+    }));
+  };
+
+  const handleCheckQuestionAnswer = (qIndex, question) => {
+    const chosen = studentAnswers[qIndex];
+    if (!chosen) return;
+    
+    const isCorrect = chosen.trim().toLowerCase() === question.answer.trim().toLowerCase() || 
+                      question.answer.trim().toLowerCase().includes(chosen.trim().toLowerCase());
+                      
+    setCheckedAnswers((prev) => ({
+      ...prev,
+      [qIndex]: { submitted: true, isCorrect }
+    }));
+  };
+
+  const handleSubmitPracticeTest = () => {
+    if (!activePracticeTest) return;
+    
+    let correctCount = 0;
+    const questions = activePracticeTest.content.questions;
+    
+    questions.forEach((q, idx) => {
+      const chosen = studentAnswers[idx] || "";
+      const isCorrect = chosen.trim().toLowerCase() === q.answer.trim().toLowerCase() || 
+                        q.answer.trim().toLowerCase().includes(chosen.trim().toLowerCase());
+      if (isCorrect) {
+        correctCount++;
+      }
+    });
+
+    setTestScore({ correct: correctCount, total: questions.length });
+    setCompletedTests((prev) => ({
+      ...prev,
+      [activePracticeTest.id]: `${correctCount}/${questions.length} Correct`
+    }));
+
+    // Award +50 XP on completion
+    awardPoints(50);
+  };
+
   return (
     <div className="dashboard-content animate-fade-in">
+      
+      {isLoading && (
+        <div className="loading-spinner-overlay" style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "15px 20px",
+          background: "rgba(30, 41, 59, 0.4)",
+          backdropFilter: "blur(12px)",
+          borderRadius: "12px",
+          border: "1px solid rgba(255, 255, 255, 0.08)",
+          margin: "15px 0",
+          color: "#94a3b8",
+          gap: "12px"
+        }}>
+          <div className="spinner" style={{
+            width: "20px",
+            height: "20px",
+            border: "3px solid rgba(255,255,255,0.1)",
+            borderTop: "3px solid #6366f1",
+            borderRadius: "50%",
+            animation: "spin 1s linear infinite"
+          }}></div>
+          <span>Synchronizing live database records...</span>
+        </div>
+      )}
+
+      {authError && (
+        <div className="error-banner" style={{
+          padding: "15px",
+          background: "rgba(239, 68, 68, 0.1)",
+          backdropFilter: "blur(8px)",
+          color: "#f87171",
+          border: "1px solid rgba(239, 68, 68, 0.2)",
+          borderRadius: "12px",
+          margin: "15px 0",
+          fontSize: "14px"
+        }}>
+          ⚠️ Database Sync Issue: {authError}
+        </div>
+      )}
       
       {/* Student Welcome Hero Header */}
       <div className="dashboard-banner student-banner">
@@ -640,121 +754,391 @@ export default function StudentDashboard() {
                 </div>
               </div>
 
-              {/* Standardized Tests Selector & Practice Quiz */}
+              {/* Standardized Tests Selector & Practice Quiz split workspace layout */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="border border-slate-100 p-5 rounded-2xl bg-white shadow-sm">
-                  <h4 className="font-extrabold text-slate-800 text-base mb-3 flex items-center gap-2">
-                    📝 My Diagnostic Modules
+                <div className="border border-slate-100 p-5 rounded-2xl bg-white shadow-sm flex flex-col">
+                  <h4 className="font-extrabold text-slate-800 text-base mb-2 flex items-center gap-2 text-indigo-700">
+                    📝 My Assigned AI Practice Tests
                   </h4>
-                  <div className="space-y-3">
-                    <div className="p-3 rounded-xl border border-amber-200 bg-amber-50/20 flex justify-between items-center">
-                      <div>
-                        <h5 className="font-bold text-slate-800 text-sm">SAT Practice Diagnostic 1</h5>
-                        <p className="text-xs text-slate-500">Quantitative & Reading Assessment</p>
-                      </div>
-                      <span className="text-xs font-extrabold px-2.5 py-1 bg-amber-100 text-amber-800 rounded-lg">87% Scored</span>
-                    </div>
-                    <div className="p-3 rounded-xl border border-slate-100 flex justify-between items-center">
-                      <div>
-                        <h5 className="font-bold text-slate-800 text-sm">ACT Readiness Diagnostic</h5>
-                        <p className="text-xs text-slate-500">English, Science & Reading block</p>
-                      </div>
-                      <span className="text-xs font-semibold text-slate-400">Not Started</span>
-                    </div>
-                    <div className="p-3 rounded-xl border border-slate-100 flex justify-between items-center">
-                      <div>
-                        <h5 className="font-bold text-slate-800 text-sm">PSAT Scholarship Prep Quiz</h5>
-                        <p className="text-xs text-slate-500">Targeted algebra and paragraph structures</p>
-                      </div>
-                      <span className="text-xs font-semibold text-slate-400">Not Started</span>
-                    </div>
+                  <p className="text-xs text-slate-500 mb-4">
+                    Select an AI-generated personalized test to begin your workspace challenge.
+                  </p>
+                  
+                  <div className="space-y-3 overflow-y-auto max-h-[380px] pr-1">
+                    {(() => {
+                      const assignedTests = practiceTests.filter((t) => t.studentId === student.id || !t.studentId);
+                      if (assignedTests.length === 0) {
+                        return (
+                          <div className="text-center py-12 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+                            <p className="text-xs text-slate-400 italic">No personalized practice tests assigned yet.</p>
+                            <p className="text-[10px] text-slate-400 mt-1">Check back once your tutor generates a test for you!</p>
+                          </div>
+                        );
+                      }
+                      return assignedTests.map((t) => {
+                        const scoreText = completedTests[t.id];
+                        const isActive = activePracticeTest?.id === t.id;
+                        return (
+                          <div 
+                            key={t.id} 
+                            className={`p-3.5 rounded-xl border transition-all ${
+                              isActive 
+                                ? "bg-indigo-50/50 border-indigo-300 shadow-sm" 
+                                : scoreText 
+                                  ? "bg-emerald-50/20 border-emerald-200" 
+                                  : "border-slate-100 bg-white hover:bg-slate-50/50 hover:shadow-xs"
+                            }`}
+                          >
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="flex flex-wrap gap-1">
+                                <span className="text-[9px] font-extrabold px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-md uppercase tracking-wide">
+                                  {t.subject}
+                                </span>
+                                <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-md uppercase tracking-wide ${
+                                  t.difficulty === "Easy" ? "bg-emerald-50 text-emerald-700 border border-emerald-100" :
+                                  t.difficulty === "Hard" ? "bg-rose-50 text-rose-700 border border-rose-100" : 
+                                  "bg-amber-50 text-amber-700 border border-amber-100"
+                                }`}>
+                                  {t.difficulty}
+                                </span>
+                              </div>
+                              <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded">
+                                {t.content?.questions?.length || 0} Qs
+                              </span>
+                            </div>
+                            <h5 className="font-extrabold text-slate-800 text-xs mb-1">{t.title}</h5>
+                            <p className="text-[10px] text-slate-500 mb-3 font-semibold">
+                              Topic: {t.topic} • Grade: {t.gradeLevel}
+                            </p>
+                            
+                            <div className="flex justify-between items-center pt-2 border-t border-slate-50">
+                              {scoreText ? (
+                                <span className="text-[11px] font-extrabold text-emerald-600 flex items-center gap-1">
+                                  ✓ Completed ({scoreText})
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-slate-400 font-semibold italic">Not Started</span>
+                              )}
+                              
+                              <button
+                                onClick={() => handleStartPracticeTest(t)}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                  isActive
+                                    ? "bg-indigo-600 text-white cursor-default shadow-xs"
+                                    : "bg-slate-50 hover:bg-indigo-50 text-slate-700 hover:text-indigo-600 border border-slate-200/50"
+                                }`}
+                              >
+                                {isActive ? "In Workspace" : "Start Quiz"}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
                   </div>
                 </div>
 
-                {/* SAT Math practice quiz item */}
-                <div className="border border-slate-100 p-5 rounded-2xl bg-white shadow-sm">
-                  <h4 className="font-extrabold text-slate-800 text-base mb-1 flex items-center gap-2">
-                    ⚡ SAT Practice Challenge Problem
-                  </h4>
-                  <p className="text-xs text-slate-500 mb-3">Answer correctly to award yourself <strong>+50 Growth Points</strong>!</p>
-                  
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-4">
-                    <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100">SAT MATH - NO CALCULATOR</span>
-                    <p className="text-xs text-slate-700 font-bold mt-2 leading-relaxed">
-                      "Find the remainder of P(x) = x³ - 3x² + 5x - 7 when divided by (x - 2)."
-                    </p>
-                  </div>
-
-                  <form onSubmit={handleSatQuizSubmit} className="space-y-3">
-                    <div className="grid grid-cols-1 gap-2">
-                      {[
-                        { key: "A", text: "A)  3" },
-                        { key: "B", text: "B)  -1 (Remainder Theorem calculation)" },
-                        { key: "C", text: "C)  5" },
-                        { key: "D", text: "D)  -7" }
-                      ].map((opt) => (
-                        <label 
-                          key={opt.key} 
-                          className={`flex items-center gap-3 p-2.5 rounded-xl border text-xs font-semibold cursor-pointer transition-all ${
-                            satSelectedAns === opt.key 
-                              ? "bg-indigo-50/50 border-indigo-300" 
-                              : "border-slate-100 hover:bg-slate-50/50"
-                          }`}
+                {/* Right Column: Active Practice Workspace or Fallback Quiz */}
+                <div className="border border-slate-100 p-5 rounded-2xl bg-white shadow-sm flex flex-col">
+                  {activePracticeTest ? (
+                    <div className="flex flex-col h-full animate-scale-up">
+                      <div className="flex justify-between items-start mb-4 border-b border-slate-100 pb-3">
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[9px] font-extrabold text-indigo-600 uppercase tracking-wider bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                              Interactive Workspace
+                            </span>
+                            <span className="text-[9px] font-extrabold text-rose-600 uppercase tracking-wider bg-rose-50 px-2 py-0.5 rounded border border-rose-100 animate-pulse">
+                              +50 XP Reward
+                            </span>
+                          </div>
+                          <h4 className="font-extrabold text-slate-800 text-sm mt-1.5">
+                            {activePracticeTest.title}
+                          </h4>
+                          <p className="text-[10px] text-slate-500 mt-0.5 font-semibold">
+                            Subject: <strong className="text-slate-700">{activePracticeTest.subject}</strong> • Topic: <strong className="text-slate-700">{activePracticeTest.topic}</strong>
+                          </p>
+                        </div>
+                        <button 
+                          onClick={() => setActivePracticeTest(null)}
+                          className="text-[11px] text-slate-400 hover:text-rose-600 font-extrabold transition-all border border-slate-100 hover:border-rose-100 rounded-lg px-2 py-1"
                         >
-                          <input 
-                            type="radio" 
-                            name="sat-quiz" 
-                            value={opt.key}
-                            checked={satSelectedAns === opt.key}
-                            onChange={() => !satQuizSubmitted && setSatSelectedAns(opt.key)}
-                            disabled={satQuizSubmitted}
-                            className="text-indigo-600 focus:ring-indigo-400"
-                          />
-                          <span>{opt.text}</span>
-                        </label>
-                      ))}
-                    </div>
-
-                    {!satQuizSubmitted ? (
-                      <button 
-                        type="submit" 
-                        disabled={satSelectedAns === null}
-                        className={`w-full py-2 text-xs font-bold rounded-xl text-white transition-all bg-indigo-600 hover:bg-indigo-700 ${
-                          satSelectedAns === null ? "opacity-50 cursor-not-allowed" : ""
-                        }`}
-                      >
-                        Submit Practice Answer
-                      </button>
-                    ) : (
-                      <div className={`p-3.5 rounded-xl border text-xs font-semibold leading-relaxed animate-scale-up ${
-                        satQuizIsCorrect 
-                          ? "bg-emerald-50 border-emerald-200 text-emerald-800" 
-                          : "bg-rose-50 border-rose-200 text-rose-800"
-                      }`}>
-                        {satQuizIsCorrect ? (
-                          <p>
-                            🎉 <strong>Amen! Correct Answer!</strong> By the Remainder Theorem, P(2) = 2³ - 3(2)² + 5(2) - 7 = 8 - 12 + 10 - 7 = -1. You earned <strong>+50 Growth Journey Points</strong>!
-                          </p>
-                        ) : (
-                          <p>
-                            ❌ <strong>Incorrect, but keep persevering!</strong> Hint: Plug x = 2 into P(x) to evaluate P(2) according to the Remainder Theorem. Click Reset to try again.
-                          </p>
-                        )}
-                        {!satQuizIsCorrect && (
-                          <button 
-                            type="button" 
-                            className="mt-2 text-xs text-indigo-600 font-bold underline"
-                            onClick={() => {
-                              setSatQuizSubmitted(false);
-                              setSatSelectedAns(null);
-                            }}
-                          >
-                            Try Again
-                          </button>
-                        )}
+                          ✕ Exit
+                        </button>
                       </div>
-                    )}
-                  </form>
+
+                      <div className="space-y-5 overflow-y-auto max-h-[380px] pr-1 mb-4">
+                        {activePracticeTest.content?.questions?.map((q, qIndex) => {
+                          const chosenAnswer = studentAnswers[qIndex];
+                          const checked = checkedAnswers[qIndex];
+                          const isHintExpanded = expandedHints[qIndex];
+                          const isTestSubmitted = testScore !== null;
+                          const showPedagogicalResponse = checked?.submitted || isTestSubmitted;
+                          
+                          // Custom correctness logic
+                          const checkCorrect = checked?.isCorrect || (isTestSubmitted && (
+                            chosenAnswer?.trim().toLowerCase() === q.answer.trim().toLowerCase() || 
+                            q.answer.trim().toLowerCase().includes(chosenAnswer?.trim().toLowerCase())
+                          ));
+
+                          return (
+                            <div key={q.id || qIndex} className="p-4 rounded-xl border border-slate-100 bg-slate-50/50 relative">
+                              <div className="flex justify-between items-center mb-2">
+                                <span className="text-[9px] font-extrabold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
+                                  QUESTION {qIndex + 1} OF {activePracticeTest.content.questions.length}
+                                </span>
+                              </div>
+                              <p className="text-xs text-slate-700 font-extrabold mb-3 leading-relaxed">
+                                {q.question}
+                              </p>
+
+                              {/* Render options if multiple choice, else render text input */}
+                              {q.options && q.options.length > 0 ? (
+                                <div className="grid grid-cols-1 gap-2 mb-3">
+                                  {q.options.map((opt, oIdx) => {
+                                    const optionLetter = String.fromCharCode(65 + oIdx); // A, B, C, D
+                                    const isSelected = chosenAnswer === opt || chosenAnswer === optionLetter;
+                                    return (
+                                      <label 
+                                        key={oIdx} 
+                                        className={`flex items-center gap-3 p-2.5 rounded-xl border text-[11px] font-bold cursor-pointer transition-all ${
+                                          isSelected 
+                                            ? "bg-indigo-50/40 border-indigo-300 text-indigo-800" 
+                                            : "border-slate-100 bg-white hover:bg-slate-50/50 text-slate-600"
+                                        }`}
+                                      >
+                                        <input 
+                                          type="radio" 
+                                          name={`q-${qIndex}`} 
+                                          value={opt}
+                                          checked={isSelected}
+                                          onChange={() => !showPedagogicalResponse && handleSelectAnswer(qIndex, opt)}
+                                          disabled={showPedagogicalResponse}
+                                          className="text-indigo-600 focus:ring-indigo-400"
+                                        />
+                                        <span>{opt}</span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <div className="mb-3">
+                                  <input
+                                    type="text"
+                                    value={chosenAnswer || ""}
+                                    onChange={(e) => !showPedagogicalResponse && handleSelectAnswer(qIndex, e.target.value)}
+                                    disabled={showPedagogicalResponse}
+                                    placeholder="Type your short answer or numerical value here..."
+                                    className="w-full p-2.5 text-xs font-bold rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-400 focus:outline-none bg-white text-slate-700"
+                                  />
+                                </div>
+                              )}
+
+                              {/* Interactive Hint Toggle */}
+                              <div className="mb-3">
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleHint(qIndex)}
+                                  className="text-[10px] text-amber-600 hover:text-amber-700 font-extrabold flex items-center gap-1 transition-all"
+                                >
+                                  💡 {isHintExpanded ? "Hide Hint" : "Get a Hint"}
+                                </button>
+                                {isHintExpanded && (
+                                  <div className="mt-1.5 p-3 rounded-lg bg-amber-50/30 border border-amber-200/40 text-amber-800 text-[10px] font-bold leading-relaxed animate-scale-up">
+                                    <strong>Hint:</strong> {q.hint || "Review your formulas and read the prompt instructions thoroughly."}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Action or Solution block */}
+                              {!showPedagogicalResponse ? (
+                                <button
+                                  type="button"
+                                  disabled={!chosenAnswer}
+                                  onClick={() => handleCheckQuestionAnswer(qIndex, q)}
+                                  className={`px-3 py-1.5 text-[10px] font-extrabold rounded-lg text-white transition-all ${
+                                    chosenAnswer 
+                                      ? "bg-slate-800 hover:bg-slate-900 cursor-pointer" 
+                                      : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                                  }`}
+                                >
+                                  Verify Answer
+                                </button>
+                              ) : (
+                                <div className="mt-3 space-y-2.5 border-t border-slate-100 pt-3 animate-scale-up">
+                                  {/* Result Banner */}
+                                  <div className={`p-2.5 rounded-xl border text-[11px] font-extrabold flex items-center gap-2 ${
+                                    checkCorrect
+                                      ? "bg-emerald-50 border-emerald-200 text-emerald-800" 
+                                      : "bg-rose-50 border-rose-200 text-rose-800"
+                                  }`}>
+                                    <span>{checkCorrect ? "✓ Correct Answer!" : "✗ Needs Review"}</span>
+                                  </div>
+
+                                  {/* Step-by-step details */}
+                                  <div className="p-3 rounded-xl border border-indigo-50 bg-indigo-50/10 space-y-2 text-[10px] leading-relaxed">
+                                    {/* Solutions */}
+                                    {activePracticeTest.config.includeSolutions !== false && q.solution && (
+                                      <div className="border-b border-slate-100 pb-2">
+                                        <span className="font-extrabold text-indigo-700 uppercase tracking-wide">📐 Step-by-Step Solving:</span>
+                                        <p className="text-slate-600 font-bold mt-1 whitespace-pre-line bg-white/60 p-2 rounded-lg border border-slate-50">
+                                          {q.solution}
+                                        </p>
+                                      </div>
+                                    )}
+
+                                    {/* Answer Key */}
+                                    {activePracticeTest.config.includeAnswerKey !== false && q.answer && (
+                                      <div className="border-b border-slate-100 pb-2">
+                                        <span className="font-extrabold text-teal-700 uppercase tracking-wide">🔑 Correct Answer Key:</span>
+                                        <p className="text-slate-800 font-extrabold mt-0.5">
+                                          {q.answer}
+                                        </p>
+                                      </div>
+                                    )}
+
+                                    {/* Common Mistakes */}
+                                    {q.common_mistakes && (
+                                      <div className="border-b border-slate-100 pb-2">
+                                        <span className="font-extrabold text-amber-700 uppercase tracking-wide">⚠️ Common Student Pitfalls:</span>
+                                        <p className="text-amber-800/90 font-semibold mt-0.5 italic">
+                                          {q.common_mistakes}
+                                        </p>
+                                      </div>
+                                    )}
+
+                                    {/* Teacher Notes */}
+                                    {q.teacher_notes && (
+                                      <div>
+                                        <span className="font-extrabold text-slate-500 uppercase tracking-wide">📓 Teacher's Guidance:</span>
+                                        <p className="text-slate-600 font-semibold mt-0.5">
+                                          {q.teacher_notes}
+                                        </p>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Submit block */}
+                      {testScore === null ? (
+                        <button
+                          type="button"
+                          onClick={handleSubmitPracticeTest}
+                          className="w-full py-2.5 bg-gradient-to-r from-indigo-600 to-rose-600 text-white font-extrabold rounded-xl hover:from-indigo-700 hover:to-rose-700 transition-all text-xs flex justify-center items-center gap-1.5 shadow-sm"
+                        >
+                          <Sparkles className="w-4 h-4 animate-spin-slow" /> Submit Diagnostic Workspace (+50 XP)
+                        </button>
+                      ) : (
+                        <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50 text-center animate-scale-up">
+                          <h5 className="font-extrabold text-emerald-800 text-xs mb-1">🎉 Practice Completed!</h5>
+                          <p className="text-xs text-emerald-700 font-semibold mb-3">
+                            Achieved {testScore.correct} / {testScore.total} correct responses. Added +50 Growth Points to your character rank!
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActivePracticeTest(null);
+                              setTestScore(null);
+                            }}
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-extrabold rounded-lg transition-all"
+                          >
+                            Close Workspace
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    /* Fallback SAT Challenge Problem */
+                    <div className="animate-scale-up">
+                      <h4 className="font-extrabold text-slate-800 text-base mb-1 flex items-center gap-2">
+                        ⚡ SAT Practice Challenge Problem
+                      </h4>
+                      <p className="text-xs text-slate-500 mb-3">Answer correctly to award yourself <strong>+50 Growth Points</strong>!</p>
+                      
+                      <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-4">
+                        <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100">SAT MATH - NO CALCULATOR</span>
+                        <p className="text-xs text-slate-700 font-bold mt-2 leading-relaxed">
+                          "Find the remainder of P(x) = x³ - 3x² + 5x - 7 when divided by (x - 2)."
+                        </p>
+                      </div>
+
+                      <form onSubmit={handleSatQuizSubmit} className="space-y-3">
+                        <div className="grid grid-cols-1 gap-2">
+                          {[
+                            { key: "A", text: "A)  3" },
+                            { key: "B", text: "B)  -1 (Remainder Theorem calculation)" },
+                            { key: "C", text: "C)  5" },
+                            { key: "D", text: "D)  -7" }
+                          ].map((opt) => (
+                            <label 
+                              key={opt.key} 
+                              className={`flex items-center gap-3 p-2.5 rounded-xl border text-xs font-semibold cursor-pointer transition-all ${
+                                satSelectedAns === opt.key 
+                                  ? "bg-indigo-50/50 border-indigo-300" 
+                                  : "border-slate-100 hover:bg-slate-50/50"
+                              }`}
+                            >
+                              <input 
+                                type="radio" 
+                                name="sat-quiz" 
+                                value={opt.key}
+                                checked={satSelectedAns === opt.key}
+                                onChange={() => !satQuizSubmitted && setSatSelectedAns(opt.key)}
+                                disabled={satQuizSubmitted}
+                                className="text-indigo-600 focus:ring-indigo-400"
+                              />
+                              <span>{opt.text}</span>
+                            </label>
+                          ))}
+                        </div>
+
+                        {!satQuizSubmitted ? (
+                          <button 
+                            type="submit" 
+                            disabled={satSelectedAns === null}
+                            className={`w-full py-2 text-xs font-bold rounded-xl text-white transition-all bg-indigo-600 hover:bg-indigo-700 ${
+                              satSelectedAns === null ? "opacity-50 cursor-not-allowed" : ""
+                            }`}
+                          >
+                            Submit Practice Answer
+                          </button>
+                        ) : (
+                          <div className={`p-3.5 rounded-xl border text-xs font-semibold leading-relaxed animate-scale-up ${
+                            satQuizIsCorrect 
+                              ? "bg-emerald-50 border-emerald-200 text-emerald-800" 
+                              : "bg-rose-50 border-rose-200 text-rose-800"
+                          }`}>
+                            {satQuizIsCorrect ? (
+                              <p>
+                                🎉 <strong>Amen! Correct Answer!</strong> By the Remainder Theorem, P(2) = 2³ - 3(2)² + 5(2) - 7 = 8 - 12 + 10 - 7 = -1. You earned <strong>+50 Growth Journey Points</strong>!
+                              </p>
+                            ) : (
+                              <p>
+                                ❌ <strong>Incorrect, but keep persevering!</strong> Hint: Plug x = 2 into P(x) to evaluate P(2) according to the Remainder Theorem. Click Reset to try again.
+                              </p>
+                            )}
+                            {!satQuizIsCorrect && (
+                              <button 
+                                type="button" 
+                                className="mt-2 text-xs text-indigo-600 font-bold underline"
+                                onClick={() => {
+                                  setSatQuizSubmitted(false);
+                                  setSatSelectedAns(null);
+                                }}
+                              >
+                                Try Again
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </form>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
