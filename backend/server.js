@@ -1764,6 +1764,25 @@ Do not wrap your output in markdown backticks \`\`\`json. Return ONLY the raw JS
 });
 
 // =========================================================================
+// HEALTH CHECK ENDPOINT
+// =========================================================================
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "healthy",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    env: {
+      node_env: process.env.NODE_ENV || "development",
+      supabase_configured: !!process.env.SUPABASE_URL && !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+      gemini_configured: !!process.env.GEMINI_API_KEY,
+      zoom_configured: !!process.env.ZOOM_CLIENT_ID && !!process.env.ZOOM_CLIENT_SECRET,
+      stripe_configured: !!process.env.STRIPE_SECRET_KEY,
+      paypal_configured: !!process.env.PAYPAL_CLIENT_ID
+    }
+  });
+});
+
+// =========================================================================
 // START THE MULTI-TENANT ENTERPRISE PORT
 // =========================================================================
 app.listen(PORT, () => {
