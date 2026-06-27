@@ -41,6 +41,7 @@ export const AppProvider = ({ children }) => {
   const [iepNotes, setIepNotes] = useState([]);
   const [copilotRecords, setCopilotRecords] = useState([]);
   const [parentCopilotRecords, setParentCopilotRecords] = useState([]);
+  const [adminInsights, setAdminInsights] = useState([]);
 
 
   // Live Zoom Integration States
@@ -384,6 +385,25 @@ export const AppProvider = ({ children }) => {
           updatedAt: cr.updated_at
         }));
         setParentCopilotRecords(formattedParentCopilot);
+      }
+
+      // O. Fetch Admin Insights Records (Only if Admin)
+      if (profile?.role === "Admin") {
+        const { data: dbAdminInsights, error: adInErr } = await supabase
+          .from("admin_insights")
+          .select("*")
+          .order("created_at", { ascending: false });
+
+        if (!adInErr && dbAdminInsights) {
+          const formattedAdminInsights = dbAdminInsights.map((ai) => ({
+            id: ai.id,
+            filters: ai.filter_state || {},
+            content: ai.content || {},
+            createdAt: ai.created_at,
+            updatedAt: ai.updated_at
+          }));
+          setAdminInsights(formattedAdminInsights);
+        }
       }
 
     } catch (err) {
@@ -2024,6 +2044,34 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  const addAdminInsight = async (filters, content) => {
+    if (isSupabaseConfigured() && currentUser) {
+      try {
+        const { error } = await supabase.from("admin_insights").insert({
+          filter_state: filters || {},
+          content
+        });
+        if (error) throw error;
+        await fetchLiveDatabaseData(currentUser);
+        return true;
+      } catch (err) {
+        console.error("[Database] Error inserting admin insight record:", err);
+        return false;
+      }
+    } else {
+      // In simulation mode, add to memory
+      const newRec = {
+        id: `insight_${Date.now()}`,
+        filters: filters || {},
+        content,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      setAdminInsights((prev) => [newRec, ...prev]);
+      return true;
+    }
+  };
+
 
   const apiFetch = async (url, options = {}) => {
     const headers = { ...(options.headers || {}) };
@@ -2090,6 +2138,8 @@ export const AppProvider = ({ children }) => {
         addCopilotRecord,
         parentCopilotRecords,
         addParentCopilotRecord,
+        adminInsights,
+        addAdminInsight,
         tutorZoomStatus,
         setTutorZoomStatus,
         tutorManualZoomLink,

@@ -18,6 +18,7 @@ import {
   Clock,
   CreditCard
 } from "lucide-react";
+import AiAdminIntelligence from "./AiAdminIntelligence";
 
 export default function AdminDashboard() {
   const {
@@ -339,6 +340,10 @@ export default function AdminDashboard() {
         <button className={`dashboard-tab-trigger ${activeSubTab === "Billing" ? "active" : ""}`} onClick={() => setActiveSubTab("Billing")}>
           <FileSpreadsheet className="tab-trigger-icon" />
           <span>Billing Audits</span>
+        </button>
+        <button className={`dashboard-tab-trigger ${activeSubTab === "Intelligence" ? "active" : ""}`} onClick={() => setActiveSubTab("Intelligence")}>
+          <ShieldCheck className="tab-trigger-icon" />
+          <span>Intelligence Center</span>
         </button>
       </div>
 
@@ -893,6 +898,11 @@ export default function AdminDashboard() {
             </div>
 
           </div>
+        )}
+
+        {/* Tab: Intelligence Center */}
+        {activeSubTab === "Intelligence" && (
+          <AiAdminIntelligence />
         )}
 
       </div>
