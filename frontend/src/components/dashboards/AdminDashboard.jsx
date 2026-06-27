@@ -19,6 +19,7 @@ import {
   CreditCard
 } from "lucide-react";
 import AiAdminIntelligence from "./AiAdminIntelligence";
+import AiCollaborationHub from "./AiCollaborationHub";
 
 export default function AdminDashboard() {
   const {
@@ -344,6 +345,10 @@ export default function AdminDashboard() {
         <button className={`dashboard-tab-trigger ${activeSubTab === "Intelligence" ? "active" : ""}`} onClick={() => setActiveSubTab("Intelligence")}>
           <ShieldCheck className="tab-trigger-icon" />
           <span>Intelligence Center</span>
+        </button>
+        <button className={`dashboard-tab-trigger ${activeSubTab === "Collaboration" ? "active" : ""}`} onClick={() => setActiveSubTab("Collaboration")}>
+          <Mail className="tab-trigger-icon" />
+          <span>Collaboration Hub</span>
         </button>
       </div>
 
@@ -903,6 +908,11 @@ export default function AdminDashboard() {
         {/* Tab: Intelligence Center */}
         {activeSubTab === "Intelligence" && (
           <AiAdminIntelligence />
+        )}
+
+        {/* Tab: Collaboration Hub */}
+        {activeSubTab === "Collaboration" && (
+          <AiCollaborationHub />
         )}
 
       </div>

@@ -213,6 +213,57 @@ const orgPolicies = {
 // Stores ad-hoc bookings created during session
 const bookingsDb = [];
 
+// Stores messaging logs for Collaboration Hub fallback
+const messagesDb = [
+  {
+    id: "msg_1",
+    created_at: new Date(Date.now() - 3600000 * 4).toISOString(), // 4 hours ago
+    sender_id: "20000000-2000-2000-2000-200000000001", // Catherine
+    sender_name: "Dr. Catherine Sterling",
+    sender_role: "Tutor",
+    recipient_id: "30000000-3000-3000-3000-300000000001", // Jonathan (Parent)
+    recipient_name: "Jonathan Edwards Sterling",
+    recipient_role: "Parent",
+    channel_id: "parent_tutor_Catherine_Jonathan",
+    content: "Hi Jonathan, Caleb did an exceptional job in our Calculus session today. His work on integrals showed great diligence!",
+    is_read: true
+  },
+  {
+    id: "msg_2",
+    created_at: new Date(Date.now() - 3600000 * 3).toISOString(), // 3 hours ago
+    sender_id: "30000000-3000-3000-3000-300000000001", // Jonathan (Parent)
+    sender_name: "Jonathan Edwards Sterling",
+    sender_role: "Parent",
+    recipient_id: "20000000-2000-2000-2000-200000000001", // Catherine
+    recipient_name: "Dr. Catherine Sterling",
+    recipient_role: "Tutor",
+    channel_id: "parent_tutor_Catherine_Jonathan",
+    content: "Thank you Dr. Sterling! That's wonderful to hear. We will keep reinforcing the integrals at home using the Parent Copilot.",
+    is_read: false
+  }
+];
+
+// Stores shared session notes logs for Collaboration Hub fallback
+const sharedNotesDb = [
+  {
+    id: "note_1",
+    created_at: new Date(Date.now() - 3600000 * 24).toISOString(), // yesterday
+    created_by: "20000000-2000-2000-2000-200000000001", // Catherine
+    student_id: "40000000-4000-4000-4000-400000000001", // Caleb
+    title: "Calculus - Session 4 Summary (Integrals Focus)",
+    summary: "In today's session, Caleb practiced applying the fundamental theorem of calculus to solve area problems under curved graphs. He worked diligently through four complex problems.",
+    parent_update: "Caleb Sterling demonstrated outstanding perseverance today during some very difficult integral computations. Encourage him to practice finding the constant of integration!",
+    action_items: [
+      { text: "Complete Calculus practice sheet on indefinite integrals.", completed: false },
+      { text: "Review common integration mistakes on page 112.", completed: true }
+    ],
+    reminders: [
+      { text: "Schedule next weekly block for calculus review.", due_date: "2026-07-02" }
+    ],
+    visibility: ["Admin", "Tutor", "Parent", "Student"]
+  }
+];
+
 // =========================================================================
 // HELPER: ZOOM CREDENTIAL REFRESH
 // =========================================================================
@@ -2609,6 +2660,173 @@ Do not wrap your output in markdown backticks \`\`\`json. Return ONLY the raw JS
     status: "Success",
     source: "OFFLINE_DEMO_ENGINE",
     insightsOutput: simulatedOutput
+  });
+});
+
+
+// =========================================================================
+// PHASE 10: COLLABORATION & COMMUNICATION HUB
+// =========================================================================
+
+// Send a secure message
+app.post("/api/collaboration/messages", requireAuth, async (req, res) => {
+  const { sender_id, sender_name, sender_role, recipient_id, recipient_name, recipient_role, channel_id, content } = req.body;
+  if (!content) {
+    return res.status(400).json({ error: "Message content is required." });
+  }
+
+  const newMessage = {
+    id: "msg_" + Date.now(),
+    created_at: new Date().toISOString(),
+    sender_id: sender_id || req.user.id,
+    sender_name: sender_name || req.user.user_metadata?.name || "User",
+    sender_role: sender_role || req.user.user_metadata?.role || "Student",
+    recipient_id,
+    recipient_name,
+    recipient_role,
+    channel_id,
+    content,
+    is_read: false
+  };
+
+  messagesDb.push(newMessage);
+  res.status(201).json({ status: "Success", source: "OFFLINE_SANDBOX_DEMO", message: newMessage });
+});
+
+// Fetch secure messages for a specific channel
+app.get("/api/collaboration/messages/:channelId", requireAuth, async (req, res) => {
+  const { channelId } = req.params;
+  const userRole = req.user.user_metadata?.role || "Student";
+  const userId = req.user.id;
+
+  let filtered = messagesDb.filter(m => m.channel_id === channelId);
+
+  // Role-based visibility gates
+  if (userRole === "Parent") {
+    if (!channelId.includes(userId) && !channelId.toLowerCase().includes("parent")) {
+      return res.status(403).json({ error: "Forbidden: Parents can only access their family communication channels." });
+    }
+  } else if (userRole === "Student") {
+    filtered = filtered.filter(m => m.sender_id === userId || m.recipient_id === userId);
+  }
+
+  res.json({ status: "Success", source: "OFFLINE_SANDBOX_DEMO", messages: filtered });
+});
+
+// Create/Update shared session notes & action items
+app.post("/api/collaboration/shared-notes", requireAuth, async (req, res) => {
+  const { student_id, title, summary, parent_update, action_items, reminders, visibility } = req.body;
+  if (!student_id || !title || !summary) {
+    return res.status(400).json({ error: "Student ID, Title, and Summary are required." });
+  }
+
+  const newNote = {
+    id: "note_" + Date.now(),
+    created_at: new Date().toISOString(),
+    created_by: req.user.id,
+    student_id,
+    title,
+    summary,
+    parent_update,
+    action_items: action_items || [],
+    reminders: reminders || [],
+    visibility: visibility || ["Admin", "Tutor", "Parent"]
+  };
+
+  sharedNotesDb.push(newNote);
+  res.status(201).json({ status: "Success", source: "OFFLINE_SANDBOX_DEMO", note: newNote });
+});
+
+// Fetch shared notes for a student
+app.get("/api/collaboration/shared-notes/:studentId", requireAuth, async (req, res) => {
+  const { studentId } = req.params;
+  const userRole = req.user.user_metadata?.role || "Student";
+  const userId = req.user.id;
+
+  let filtered = sharedNotesDb.filter(n => n.student_id === studentId);
+
+  if (userRole === "Parent") {
+    filtered = filtered.filter(n => n.visibility.includes("Parent"));
+  } else if (userRole === "Student") {
+    filtered = filtered.filter(n => n.visibility.includes("Student") && n.student_id === userId);
+  } else if (userRole === "Tutor") {
+    filtered = filtered.filter(n => n.visibility.includes("Tutor"));
+  }
+
+  res.json({ status: "Success", source: "OFFLINE_SANDBOX_DEMO", notes: filtered });
+});
+
+// AI Generation of professional session summaries and parent reminders
+app.post("/api/ai/generate-collaboration-notes", requireAuth, async (req, res) => {
+  const { sessionTopic, rawTutorNotes, studentName, characterTheme } = req.body;
+  if (!sessionTopic || !rawTutorNotes) {
+    return res.status(400).json({ error: "Session Topic and Raw Tutor Notes are required." });
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  const isGeminiConfigured = !!(apiKey && !apiKey.includes("PLACEHOLDER"));
+
+  if (isGeminiConfigured) {
+    const systemInstruction = `You are the Ambience AI Collaboration Assistant, designed for the Ambience TutorsFlow platform.
+You take raw tutor observations and a lesson topic, then format them into a highly polished, professional educational record.
+Format your output as a single, valid JSON object with the following exact keys:
+- summary: A detailed, professional educational summary of the lesson suitable for administrators.
+- parentUpdate: A warm, encouraging, parent-friendly update detailing the student's efforts, achievements, and reinforcing a specific Christian character virtue (like Perseverance, Integrity, Diligence, or Kindness).
+- actionItems: An array of strings representing actionable follow-up homework or review items.
+- reminders: An array of strings representing follow-up administrative or review calendar deadlines.`;
+
+    const userPrompt = `Student Name: "${studentName || "Caleb Sterling"}"
+Session Topic: "${sessionTopic}"
+Character Focus: "${characterTheme || "Perseverance & Diligence"}"
+Raw Tutor Notes: "${rawTutorNotes}"`;
+
+    try {
+      const response = await axios.post(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        {
+          contents: [{ parts: [{ text: userPrompt }] }],
+          systemInstruction: { parts: [{ text: systemInstruction }] },
+          generationConfig: {
+            responseMimeType: "application/json",
+            temperature: 0.2
+          }
+        },
+        { timeout: 20000 }
+      );
+
+      const responseText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (responseText) {
+        const parsedJson = JSON.parse(responseText.trim());
+        return res.json({ status: "Success", source: "GEMINI_API", collaborationOutput: parsedJson });
+      }
+    } catch (aiError) {
+      console.error("[AI Collaboration] Live Gemini API failed. Falling back to Offline Rule-Engine.", aiError.message);
+    }
+  }
+
+  // ==========================================
+  // OFFLINE HIGH-FIDELITY RULE-ENGINE FALLBACK
+  // ==========================================
+  const name = studentName || "Caleb Sterling";
+  const theme = characterTheme || "Perseverance & Diligence";
+  
+  const fallbackOutput = {
+    summary: `During today's session on "${sessionTopic}", the student demonstrated focused attention. We reviewed fundamental rules, solved multiple practice exercises step-by-step, and resolved misconceptions around key formulas.`,
+    parentUpdate: `Dear Parent, ${name} did a wonderful job today studying "${sessionTopic}". I am particularly proud of how they demonstrated ${theme} when working through the most difficult calculations. They didn't give up and successfully completed the exercises!`,
+    actionItems: [
+      `Complete the 5 remaining homework exercises on "${sessionTopic}".`,
+      `Review key glossary terms and formula rules before our next block.`
+    ],
+    reminders: [
+      `Bring questions on homework to the warm-up segment of our next session.`,
+      `Log into the Student Portal to claim the milestone badge for completing this lesson.`
+    ]
+  };
+
+  res.json({
+    status: "Success",
+    source: "OFFLINE_DEMO_ENGINE",
+    collaborationOutput: fallbackOutput
   });
 });
 

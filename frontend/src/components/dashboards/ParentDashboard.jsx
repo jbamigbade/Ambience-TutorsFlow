@@ -25,6 +25,7 @@ import {
   Sparkles
 } from "lucide-react";
 import AiParentCopilot from "./AiParentCopilot";
+import AiCollaborationHub from "./AiCollaborationHub";
 
 export default function ParentDashboard() {
   const {
@@ -410,6 +411,10 @@ export default function ParentDashboard() {
         <button className={`dashboard-tab-trigger ${activeSubTab === "Chat" ? "active" : ""}`} onClick={() => setActiveSubTab("Chat")}>
           <MessageSquare className="tab-trigger-icon" />
           <span>Tutor Messages</span>
+        </button>
+        <button className={`dashboard-tab-trigger ${activeSubTab === "Collaboration" ? "active" : ""}`} onClick={() => setActiveSubTab("Collaboration")}>
+          <MessageSquare className="tab-trigger-icon" />
+          <span>Collaboration Hub</span>
         </button>
         <button className={`dashboard-tab-trigger ${activeSubTab === "IEP" ? "active" : ""}`} onClick={() => setActiveSubTab("IEP")}>
           <ShieldCheck className="tab-trigger-icon text-teal-600" />
@@ -1398,6 +1403,13 @@ export default function ParentDashboard() {
       {activeSubTab === "Copilot" && (
         <div className="animate-scale-up">
           <AiParentCopilot />
+        </div>
+      )}
+
+      {/* Sub-Tab: Collaboration Hub */}
+      {activeSubTab === "Collaboration" && (
+        <div className="animate-scale-up">
+          <AiCollaborationHub />
         </div>
       )}
     </div>

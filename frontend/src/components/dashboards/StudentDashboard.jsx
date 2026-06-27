@@ -1,5 +1,6 @@
 import React, { useContext, useState } from "react";
 import { AppContext } from "../../context/AppContext";
+import AiCollaborationHub from "./AiCollaborationHub";
 import {
   Sparkles,
   Calendar,
@@ -287,6 +288,11 @@ export default function StudentDashboard() {
               <button className={`sidebar-nav-btn ${activeTab === "Resources" ? "active" : ""}`} onClick={() => setActiveTab("Resources")}>
                 <Download className="sidebar-nav-icon" />
                 <span>Study Resources</span>
+                <ChevronRight className="chevron-right-arrow" />
+              </button>
+              <button className={`sidebar-nav-btn ${activeTab === "Collaboration" ? "active" : ""}`} onClick={() => setActiveTab("Collaboration")}>
+                <BookOpen className="sidebar-nav-icon text-indigo-400" />
+                <span>Collaboration Hub</span>
                 <ChevronRight className="chevron-right-arrow" />
               </button>
             </div>
@@ -1284,6 +1290,12 @@ export default function StudentDashboard() {
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {activeTab === "Collaboration" && (
+            <div className="animate-scale-up">
+              <AiCollaborationHub />
             </div>
           )}
 

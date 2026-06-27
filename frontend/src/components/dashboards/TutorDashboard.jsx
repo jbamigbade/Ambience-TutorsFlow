@@ -4,6 +4,7 @@ import AiTestGenerator from "./AiTestGenerator";
 import AiLessonPlanner from "./AiLessonPlanner";
 import AiIepAssistant from "./AiIepAssistant";
 import AiTutorCopilot from "./AiTutorCopilot";
+import AiCollaborationHub from "./AiCollaborationHub";
 import {
   Calendar,
   Users,
@@ -1869,6 +1870,10 @@ export default function TutorDashboard() {
           <MessageSquare className="tab-trigger-icon" />
           <span>Direct Chats</span>
         </button>
+        <button className={`dashboard-tab-trigger ${activeSubTab === "Collaboration" ? "active" : ""}`} onClick={() => setActiveSubTab("Collaboration")}>
+          <Users className="tab-trigger-icon" />
+          <span>Collaboration Hub</span>
+        </button>
         <button className={`dashboard-tab-trigger ${activeSubTab === "TestGenerator" ? "active" : ""}`} onClick={() => setActiveSubTab("TestGenerator")}>
           <Sparkles className="tab-trigger-icon" style={{ color: "#a855f7" }} />
           <span style={{ fontWeight: activeSubTab === "TestGenerator" ? "700" : "inherit" }}>AI Test Generator™</span>
@@ -3495,6 +3500,10 @@ export default function TutorDashboard() {
 
       {activeSubTab === "TutorCopilot" && (
         <AiTutorCopilot />
+      )}
+
+      {activeSubTab === "Collaboration" && (
+        <AiCollaborationHub />
       )}
 
       {/* ----------------------------------------------------
