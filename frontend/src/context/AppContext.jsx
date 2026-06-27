@@ -40,6 +40,7 @@ export const AppProvider = ({ children }) => {
   const [lessonPlans, setLessonPlans] = useState([]);
   const [iepNotes, setIepNotes] = useState([]);
   const [copilotRecords, setCopilotRecords] = useState([]);
+  const [parentCopilotRecords, setParentCopilotRecords] = useState([]);
 
 
   // Live Zoom Integration States
@@ -360,6 +361,29 @@ export const AppProvider = ({ children }) => {
           updatedAt: cr.updated_at
         }));
         setCopilotRecords(formattedCopilot);
+      }
+
+      // N. Fetch Parent Copilot Records
+      const { data: dbParentCopilot, error: pCopErr } = await supabase
+        .from("parent_copilot_records")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (!pCopErr && dbParentCopilot) {
+        const formattedParentCopilot = dbParentCopilot.map((cr) => ({
+          id: cr.id,
+          studentId: cr.student_id,
+          parentId: cr.parent_id,
+          subject: cr.subject,
+          topic: cr.topic,
+          currentAssignment: cr.current_assignment,
+          parentConcern: cr.parent_concern,
+          supportType: cr.support_type,
+          content: cr.content,
+          createdAt: cr.created_at,
+          updatedAt: cr.updated_at
+        }));
+        setParentCopilotRecords(formattedParentCopilot);
       }
 
     } catch (err) {
@@ -1960,6 +1984,46 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  const addParentCopilotRecord = async (studentId, subject, topic, currentAssignment, parentConcern, supportType, content) => {
+    if (isSupabaseConfigured() && currentUser) {
+      try {
+        const { error } = await supabase.from("parent_copilot_records").insert({
+          student_id: studentId || null,
+          parent_id: currentUser.id,
+          subject,
+          topic,
+          current_assignment: currentAssignment || "",
+          parent_concern: parentConcern || "",
+          support_type: supportType || "",
+          content
+        });
+        if (error) throw error;
+        await fetchLiveDatabaseData(currentUser);
+        return true;
+      } catch (err) {
+        console.error("[Database] Error inserting parent copilot record:", err);
+        return false;
+      }
+    } else {
+      // In simulation mode, add to memory
+      const newRec = {
+        id: `pcop_${Date.now()}`,
+        studentId: studentId || null,
+        parentId: currentUser?.id || "par_1",
+        subject,
+        topic,
+        currentAssignment: currentAssignment || "",
+        parentConcern: parentConcern || "",
+        supportType: supportType || "",
+        content,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      setParentCopilotRecords((prev) => [newRec, ...prev]);
+      return true;
+    }
+  };
+
 
   const apiFetch = async (url, options = {}) => {
     const headers = { ...(options.headers || {}) };
@@ -2024,6 +2088,8 @@ export const AppProvider = ({ children }) => {
         addIepNote,
         copilotRecords,
         addCopilotRecord,
+        parentCopilotRecords,
+        addParentCopilotRecord,
         tutorZoomStatus,
         setTutorZoomStatus,
         tutorManualZoomLink,

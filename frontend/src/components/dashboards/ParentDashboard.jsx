@@ -21,8 +21,10 @@ import {
   FileText,
   Trash2,
   Sliders,
-  Check
+  Check,
+  Sparkles
 } from "lucide-react";
+import AiParentCopilot from "./AiParentCopilot";
 
 export default function ParentDashboard() {
   const {
@@ -416,6 +418,10 @@ export default function ParentDashboard() {
         <button className={`dashboard-tab-trigger ${activeSubTab === "Billing" ? "active" : ""}`} onClick={() => setActiveSubTab("Billing")}>
           <DollarSign className="tab-trigger-icon" />
           <span>Payments Ledger</span>
+        </button>
+        <button className={`dashboard-tab-trigger ${activeSubTab === "Copilot" ? "active" : ""}`} onClick={() => setActiveSubTab("Copilot")}>
+          <Sparkles className="tab-trigger-icon icon-gold animate-pulse" />
+          <span>AI Parent Copilot™</span>
         </button>
       </div>
 
@@ -1385,6 +1391,13 @@ export default function ParentDashboard() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Sub-Tab: AI Parent Copilot */}
+      {activeSubTab === "Copilot" && (
+        <div className="animate-scale-up">
+          <AiParentCopilot />
         </div>
       )}
     </div>

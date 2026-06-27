@@ -2251,6 +2251,178 @@ Requested support focus type: "${supportType}".`;
 });
 
 
+// PHASE 8: AI PARENT COPILOT ENDPOINTS
+// =========================================================================
+const parentCopilotDb = [];
+
+// GET: Retrieve all saved parent copilot records (offline registry)
+app.get("/api/ai/parent-copilot-records", requireAuth, (req, res) => {
+  const { studentId, parentId } = req.query;
+  let filtered = parentCopilotDb;
+  
+  if (studentId) {
+    filtered = filtered.filter(cr => cr.studentId === studentId);
+  }
+  if (parentId) {
+    filtered = filtered.filter(cr => cr.parentId === parentId);
+  }
+  
+  res.json({ status: "Success", parentCopilotRecords: filtered });
+});
+
+// POST: Save parent copilot record to local memory (offline fallback)
+app.post("/api/ai/parent-copilot-records", requireAuth, requireRole(["Parent", "Admin"]), (req, res) => {
+  const { studentId, parentId, subject, topic, currentAssignment, parentConcern, supportType, content } = req.body;
+  
+  if (!subject || !topic || !content) {
+    return res.status(400).json({ error: "Missing required parent copilot record fields." });
+  }
+
+  const newRecord = {
+    id: "pcop_" + Math.random().toString(36).substr(2, 9),
+    studentId: studentId || null,
+    parentId: parentId || req.user.id || "par_1",
+    subject,
+    topic,
+    currentAssignment: currentAssignment || "",
+    parentConcern: parentConcern || "",
+    supportType: supportType || "",
+    content,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  parentCopilotDb.push(newRecord);
+  console.log(`[Database] Parent Copilot record for topic "${topic}" saved to offline in-memory registry.`);
+  res.json({ status: "Success", parentCopilotRecord: newRecord });
+});
+
+// POST: AI Parent Copilot Generator
+app.post("/api/ai/generate-parent-copilot", requireAuth, requireRole(["Parent", "Admin"]), async (req, res) => {
+  const {
+    studentId,
+    studentName = "Student",
+    subject = "Mathematics",
+    topic,
+    currentAssignment = "",
+    parentConcern = "",
+    supportType = "At-home coaching"
+  } = req.body;
+
+  if (!subject || !topic) {
+    return res.status(400).json({ error: "Subject and Topic are required fields to run the Parent Copilot." });
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY || process.env.AI_API_KEY;
+  const isAiEnabled = apiKey && !apiKey.includes("PLACEHOLDER") && apiKey.trim().length > 10;
+
+  if (isAiEnabled) {
+    console.log(`[AI Parent Copilot Engine] Calling Live Gemini AI for Subject: ${subject}, Topic: ${topic}`);
+
+    const systemInstruction = `You are Ambience Parent Copilot™, an elite at-home academic coach and parent support assistant.
+Your output MUST be a single, valid JSON object matching the exact structure below:
+{
+  "parentExplanation": "String - Simple, clear, encouraging explanation for the parent to understand the topic easily without complex academic jargon.",
+  "homeworkGuide": "String - Specific guidance on how to help the student through homework or assignments on this topic without doing the work for them.",
+  "atHomePractice": "String - A set of 2-3 interactive, at-home practice activities or verbal questions to reinforce understanding.",
+  "studentEncouragement": "String - A short, positive, uplifting message for the parent to read to the student to boost confidence.",
+  "progressSummary": "String - A constructive summary explaining what milestones the student is achieving by learning this topic.",
+  "tutorQuestions": "String - 2-3 thoughtful questions the parent can ask their child's tutor about progress or support in this area.",
+  "studentQuestions": "String - 2-3 warm, non-threatening questions to ask the student during or after learning to check their understanding.",
+  "characterReflection": "String - A supportive character reflection tying this topic or study process to Christian values like patience, diligence, resilience, and gratitude.",
+  "bibleReflection": "String - A relevant encouraging scripture verse reference and brief thought relating study habits, courage, or learning to God's word.",
+  "iepSupportTips": "String - Gentle, actionable accommodation tips or sensory guidance for the parent if the student has learning differences or feels easily frustrated."
+}
+
+Do not wrap your output in markdown backticks \`\`\`json. Return ONLY the raw JSON object.`;
+
+    const userPrompt = `Generate parent support assets for a parent helping a student with the subject "${subject}" and topic "${topic}".
+Current assignment or test context: "${currentAssignment}".
+Parent's primary concern: "${parentConcern}".
+Desired support type: "${supportType}".`;
+
+    try {
+      const response = await axios.post(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        {
+          contents: [{ parts: [{ text: userPrompt }] }],
+          systemInstruction: { parts: [{ text: systemInstruction }] },
+          generationConfig: {
+            responseMimeType: "application/json",
+            temperature: 0.3
+          }
+        },
+        { timeout: 15000 }
+      );
+
+      const responseText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (responseText) {
+        const parsedJson = JSON.parse(responseText.trim());
+        return res.json({ status: "Success", source: "GEMINI_API", copilotOutput: parsedJson });
+      }
+    } catch (aiError) {
+      console.error("[AI Parent Copilot Engine] Live Gemini API failed. Falling back to Offline Rule-Engine.", aiError.message);
+    }
+  }
+
+  // ==========================================
+  // OFFLINE HIGH-FIDELITY RULE-ENGINE FALLBACK
+  // ==========================================
+  console.log(`[AI Parent Copilot Engine] Utilizing Offline Fallback Engine for Subject: ${subject}, Topic: ${topic}`);
+
+  // Base Fallback Content
+  let parentExpl = `Think of "${topic}" as learning to ride a bicycle. At first, your child needs a lot of balance support (our scaffolding), but soon they will pedal independently. This topic is about building that initial balance!`;
+  let homeworkG = `1. Ask your child to explain the problem in their own words first.\n2. Guide them to highlight the main question.\n3. Celebrate small victories, like showing their work, even if the final calculation has a minor slip.`;
+  let atHomePrac = `1. Dynamic Discussion: Ask your child how they would teach this topic to a friend.\n2. Quick Scenario: Give them a simple, everyday example (like sorting groceries or division during snack time) to apply the rule.`;
+  let studEncour = `You are doing a wonderful job, ${studentName}! Learning new things takes time, but every effort you make is building your brain. I am so proud of your hard work and diligence!`;
+  let progSummary = `By mastering "${topic}", your child is developing critical thinking patterns, logic benchmarks, and problem-solving skills in ${subject}. This forms a vital stepping stone for upcoming learning units.`;
+  let tutorQ = `1. How does my child respond when they encounter a challenge in "${topic}"?\n2. Are there specific learning aids or visual tools we should use at home to match your tutoring sessions?`;
+  let studentQ = `1. What was the most interesting or surprising part about "${topic}" today?\n2. Which part felt a little tricky, and how can we tackle it together?`;
+  let charReflect = `Learning "${topic}" requires a heart of Patience and Diligence. We are reminded that "the testing of your faith produces perseverance" (James 1:3). Encourage your child that struggles are just pathways to growth.`;
+  let bibleReflect = `Philippians 4:13 - "I can do all things through Christ who strengthens me." Encourage your child that God has gifted them with a capable mind and that they can approach their schoolwork with peace and confidence.`;
+  let iepSupport = `If your child gets frustrated:\n1. Break homework into 10-minute blocks with short sensory or stretching breaks.\n2. Reduce visual distractions on their desk.\n3. Allow them to dictate answers verbally to reduce writing fatigue.`;
+
+  // Custom tailoring by subject
+  const lowerSubject = subject.toLowerCase();
+  if (lowerSubject.includes("math") || lowerSubject.includes("calculus") || lowerSubject.includes("algebra") || lowerSubject.includes("sat") || lowerSubject.includes("act")) {
+    parentExpl = `In Mathematics, "${topic}" is all about patterns and structural relationships. It is like climbing a staircase—we must build a secure footing on each step so your child feels safe and steady as they climb higher.`;
+    homeworkG = `Avoid telling them the answer. Instead, ask: "What is our mathematical recipe/formula for this?" or "Can you draw a diagram of what is happening?" This builds deep mathematical autonomy.`;
+  } else if (lowerSubject.includes("science") || lowerSubject.includes("physics") || lowerSubject.includes("chemistry")) {
+    parentExpl = `Science is all about curiosity and discovery. "${topic}" explains how a physical, biological, or chemical process works in our God-given universe. Think of it like examining the gears of a tiny, perfect watch!`;
+  } else if (lowerSubject.includes("english") || lowerSubject.includes("language") || lowerSubject.includes("ela")) {
+    parentExpl = `Reading and writing are the keys to clear communication. "${topic}" teaches children how to structure their thoughts, punctuation, or grammar like building a sturdy house out of blocks.`;
+  } else if (lowerSubject.includes("bible")) {
+    parentExpl = `This unit is a beautiful exploration of God's Word focusing on "${topic}". It is about learning the historical context, scripture truths, and practical ways to live out our faith with grace, honesty, and love.`;
+    charReflect = `Focusing on "${topic}" encourages Diligence, Kindness, and Love. It is a wonderful chance to reflect on how we can show Christ's character in our daily words and studies.`;
+  }
+
+  // Tailor based on concern
+  if (parentConcern) {
+    homeworkG += `\n* Action for your concern ("${parentConcern}"): Practice active listening and give reassuring affirmations before starting. Provide structured pauses if anxiety or fatigue rises.`;
+    iepSupport += `\n* Adaptive tip: Since you noted concern about "${parentConcern}", try using physical tokens (like coins/blocks) or visual timetables to ease cognitive load.`;
+  }
+
+  const simulatedCopilot = {
+    parentExplanation: parentExpl,
+    homeworkGuide: homeworkG,
+    atHomePractice: atHomePrac,
+    studentEncouragement: studEncour,
+    progressSummary: progSummary,
+    tutorQuestions: tutorQ,
+    studentQuestions: studentQ,
+    characterReflection: charReflect,
+    bibleReflection: bibleReflect,
+    iepSupportTips: iepSupport
+  };
+
+  res.json({
+    status: "Success",
+    source: "OFFLINE_DEMO_ENGINE",
+    copilotOutput: simulatedCopilot
+  });
+});
+
+
 // =========================================================================
 
 // HEALTH CHECK ENDPOINT
