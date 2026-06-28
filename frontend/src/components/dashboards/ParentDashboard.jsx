@@ -22,10 +22,12 @@ import {
   Trash2,
   Sliders,
   Check,
-  Sparkles
+  Sparkles,
+  Zap
 } from "lucide-react";
 import AiParentCopilot from "./AiParentCopilot";
 import AiCollaborationHub from "./AiCollaborationHub";
+import SubscriptionManager from "./SubscriptionManager";
 
 export default function ParentDashboard() {
   const {
@@ -427,6 +429,10 @@ export default function ParentDashboard() {
         <button className={`dashboard-tab-trigger ${activeSubTab === "Copilot" ? "active" : ""}`} onClick={() => setActiveSubTab("Copilot")}>
           <Sparkles className="tab-trigger-icon icon-gold animate-pulse" />
           <span>AI Parent Copilot™</span>
+        </button>
+        <button className={`dashboard-tab-trigger ${activeSubTab === "Subscription" ? "active" : ""}`} onClick={() => setActiveSubTab("Subscription")}>
+          <Zap className="tab-trigger-icon text-amber-500 animate-pulse" />
+          <span>My Plan</span>
         </button>
       </div>
 
@@ -1410,6 +1416,13 @@ export default function ParentDashboard() {
       {activeSubTab === "Collaboration" && (
         <div className="animate-scale-up">
           <AiCollaborationHub />
+        </div>
+      )}
+
+      {/* Sub-Tab: Subscriptions */}
+      {activeSubTab === "Subscription" && (
+        <div className="animate-scale-up">
+          <SubscriptionManager />
         </div>
       )}
     </div>

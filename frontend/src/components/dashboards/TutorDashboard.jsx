@@ -5,6 +5,7 @@ import AiLessonPlanner from "./AiLessonPlanner";
 import AiIepAssistant from "./AiIepAssistant";
 import AiTutorCopilot from "./AiTutorCopilot";
 import AiCollaborationHub from "./AiCollaborationHub";
+import SubscriptionManager from "./SubscriptionManager";
 import {
   Calendar,
   Users,
@@ -20,6 +21,8 @@ import {
   DollarSign,
   Sliders,
   Sparkles,
+  Lock,
+  Zap,
   Edit,
   Save,
   UserCheck,
@@ -35,8 +38,7 @@ import {
   UserPlus,
   Download,
   Printer,
-  Heart,
-  Lock
+  Heart
 } from "lucide-react";
 
 export default function TutorDashboard() {
@@ -1841,7 +1843,7 @@ export default function TutorDashboard() {
       {/* ----------------------------------------------------
           TUTOR SUB NAVIGATION ROW (8 MODULES)
           ---------------------------------------------------- */}
-      <div className="dashboard-tabs-header-row" style={{ flexWrap: "wrap", rowGap: "10px" }}>
+      <div className="dashboard-tabs-header-row">
         <button className={`dashboard-tab-trigger ${activeSubTab === "Schedule" ? "active" : ""}`} onClick={() => setActiveSubTab("Schedule")}>
           <Calendar className="tab-trigger-icon" />
           <span>Daily Schedule</span>
@@ -1893,6 +1895,10 @@ export default function TutorDashboard() {
         <button className={`dashboard-tab-trigger ${activeSubTab === "Profile" ? "active" : ""}`} onClick={() => setActiveSubTab("Profile")}>
           <Sliders className="tab-trigger-icon" />
           <span>Invite & Availability</span>
+        </button>
+        <button className={`dashboard-tab-trigger ${activeSubTab === "Subscriptions" ? "active" : ""}`} onClick={() => setActiveSubTab("Subscriptions")}>
+          <Zap className="tab-trigger-icon text-amber-500 animate-pulse" />
+          <span>My Plan</span>
         </button>
       </div>
 
@@ -3491,19 +3497,62 @@ export default function TutorDashboard() {
       )}
 
       {activeSubTab === "LessonPlanner" && (
-        <AiLessonPlanner />
+        activeSubscription?.plan_name === "Tutor Pro" || activeSubscription?.plan_name === "Business" || activeSubscription?.plan_name === "School" ? (
+          <AiLessonPlanner />
+        ) : (
+          <div className="panel-card text-center p-12 bg-slate-900/60 border border-slate-800 rounded-2xl flex flex-col items-center gap-4 animate-scale-up" style={{ margin: "24px 0" }}>
+            <Lock className="h-16 w-16 text-amber-500 animate-pulse" />
+            <h3 className="text-2xl font-bold text-white">AI Lesson Planner Locked</h3>
+            <p className="text-slate-400 text-xs max-w-md mx-auto leading-relaxed">
+              Unlock the advanced multi-grade, multi-subject lesson plan builder, curriculum objectives generator, differentiation advisor, and character integration matrices by upgrading to Tutor Pro.
+            </p>
+            <button className="btn-primary" onClick={() => setActiveSubTab("Subscriptions")}>
+              <span>Upgrade to Tutor Pro</span>
+            </button>
+          </div>
+        )
       )}
 
       {activeSubTab === "IepAssistant" && (
-        <AiIepAssistant />
+        activeSubscription?.plan_name === "Tutor Pro" || activeSubscription?.plan_name === "Business" || activeSubscription?.plan_name === "School" ? (
+          <AiIepAssistant />
+        ) : (
+          <div className="panel-card text-center p-12 bg-slate-900/60 border border-slate-800 rounded-2xl flex flex-col items-center gap-4 animate-scale-up" style={{ margin: "24px 0" }}>
+            <Lock className="h-16 w-16 text-amber-500 animate-pulse" />
+            <h3 className="text-2xl font-bold text-white">AI IEP Assistant Locked</h3>
+            <p className="text-slate-400 text-xs max-w-md mx-auto leading-relaxed">
+              Unlock student strengths analyzers, challenge loggers, goal drafters, progress monitoring trackers, and parent update compilers by upgrading to Tutor Pro.
+            </p>
+            <button className="btn-primary" onClick={() => setActiveSubTab("Subscriptions")}>
+              <span>Upgrade to Tutor Pro</span>
+            </button>
+          </div>
+        )
       )}
 
       {activeSubTab === "TutorCopilot" && (
-        <AiTutorCopilot />
+        activeSubscription?.plan_name === "Tutor Pro" || activeSubscription?.plan_name === "Business" || activeSubscription?.plan_name === "School" ? (
+          <AiTutorCopilot />
+        ) : (
+          <div className="panel-card text-center p-12 bg-slate-900/60 border border-slate-800 rounded-2xl flex flex-col items-center gap-4 animate-scale-up" style={{ margin: "24px 0" }}>
+            <Lock className="h-16 w-16 text-amber-500 animate-pulse" />
+            <h3 className="text-2xl font-bold text-white">AI Tutor Copilot Locked</h3>
+            <p className="text-slate-400 text-xs max-w-md mx-auto leading-relaxed">
+              Unlock live session teaching guides, incremental hint explainers, practice problem generators, common mistake detectors, and parent-friendly summaries by upgrading to Tutor Pro.
+            </p>
+            <button className="btn-primary" onClick={() => setActiveSubTab("Subscriptions")}>
+              <span>Upgrade to Tutor Pro</span>
+            </button>
+          </div>
+        )
       )}
 
       {activeSubTab === "Collaboration" && (
         <AiCollaborationHub />
+      )}
+
+      {activeSubTab === "Subscriptions" && (
+        <SubscriptionManager />
       )}
 
       {/* ----------------------------------------------------

@@ -264,6 +264,12 @@ const sharedNotesDb = [
   }
 ];
 
+// Stores user subscriptions for Phase 11 fallback
+const activeSubscriptionsMap = {};
+
+// Stores AI Homework Assistant records for Phase 11 fallback
+const homeworkAssistantDb = [];
+
 // =========================================================================
 // HELPER: ZOOM CREDENTIAL REFRESH
 // =========================================================================
@@ -2829,6 +2835,332 @@ Raw Tutor Notes: "${rawTutorNotes}"`;
     collaborationOutput: fallbackOutput
   });
 });
+
+
+// =========================================================================
+// PHASE 11: SUBSCRIPTION PLANS & AI HOMEWORK ASSISTANT ENDPOINTS
+// =========================================================================
+
+const SUBSCRIPTION_PLANS = [
+  { id: "free", name: "Free", price: 0, description: "Basic learning dashboard and scheduling.", features: ["Core booking", "Standard scheduling", "Manual calendar notes"] },
+  { id: "student_basic", name: "Student AI Basic", price: 19, description: "AI concept explanations and homework guidance.", features: ["All Free features", "AI concept breakdown", "10 homework uploads/mo", "Encouraging hints"] },
+  { id: "student_plus", name: "Student AI Plus", price: 49, description: "Advanced homework solving and step-by-step guidance.", features: ["All Basic features", "Unlimited homework uploads", "Step-by-step solutions", "Similar practice generators", "Track mastery analytics"] },
+  { id: "student_premium", name: "Student AI Premium", price: 99, description: "VIP level learning tools with custom practice.", features: ["All Plus features", "Custom practice exam builder", "Specialized IEP assistance", "Advanced diagnostic SAT/ACT analytics", "Priority support"] },
+  
+  // Professional Tutor Plans
+  { id: "tutor_starter", name: "Tutor Starter", price: 29, description: "Perfect for independent tutors.", features: ["0 included tutoring hours", "AI Lesson Planner", "AI Tutor Copilot", "AI Homework Assistant", "Student Progress Analytics", "Parent Reports", "Character Education", "Session Notes", "Priority Support"] },
+  { id: "tutor_flex", name: "Tutor Flex", price: 299, description: "Includes 4 tutoring hours/month.", features: ["4 included tutoring hours", "AI Lesson Planner", "AI Tutor Copilot", "AI Homework Assistant", "Student Progress Analytics", "Parent Reports", "Character Education", "Session Notes", "Priority Support"] },
+  { id: "tutor_professional", name: "Tutor Professional", price: 499, description: "Includes 8 tutoring hours/month.", features: ["8 included tutoring hours", "AI Lesson Planner", "AI Tutor Copilot", "AI Homework Assistant", "Student Progress Analytics", "Parent Reports", "Character Education", "Session Notes", "Priority Support"] },
+  { id: "tutor_elite", name: "Tutor Elite", price: 799, description: "Includes 16 tutoring hours/month.", features: ["16 included tutoring hours", "AI Lesson Planner", "AI Tutor Copilot", "AI Homework Assistant", "Student Progress Analytics", "Parent Reports", "Character Education", "Session Notes", "Priority Support"] },
+  
+  // Institutional Plans
+  { id: "business", name: "Business", price: 199, description: "Full center control panel with executive analytics.", features: ["Administrator Intelligence Center", "Multi-tenant audits", "Custom center branding", "Unlimited tutors and students", "Staff analytical tracking"] },
+  { id: "school", name: "School", price: 499, description: "District and school integration dashboard.", features: ["District-wide LMS integration", "School-board diagnostics auditing", "Custom school subdomains", "Dedicated service accounts", "LTI Blackboard/Canvas connectors"] },
+  { id: "enterprise", name: "Enterprise", price: 999, description: "Fully custom scale deployment for large learning networks.", features: ["District-wide Custom SLA", "White-glove 24/7 dedicated support", "Custom AI Fine-Tuning", "Complete multi-tenant system controls", "Custom LMS Connectors & integrations"] }
+];
+
+// 1. Fetch available subscription plans
+app.get("/api/subscriptions/plans", (req, res) => {
+  res.json({ status: "Success", plans: SUBSCRIPTION_PLANS });
+});
+
+// 2. Fetch active subscription for current user
+app.get("/api/subscriptions/active", requireAuth, async (req, res) => {
+  const userId = req.user.id;
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const anonKey = process.env.SUPABASE_ANON_KEY;
+  const isSupabaseConfigured = !!(supabaseUrl && anonKey && !supabaseUrl.includes("PLACEHOLDER") && !anonKey.includes("PLACEHOLDER"));
+
+  if (isSupabaseConfigured) {
+    try {
+      // Query subscriptions table in PostgreSQL
+      const response = await axios.get(`${supabaseUrl}/rest/v1/subscriptions?profile_id=eq.${userId}`, {
+        headers: { Authorization: `Bearer ${req.headers.authorization.split(" ")[1]}`, apikey: anonKey }
+      });
+      if (response.data && response.data.length > 0) {
+        return res.json({ status: "Success", source: "SUPABASE_POSTGRES", subscription: response.data[0] });
+      } else {
+        // Automatically provision a default Free plan
+        const defaultSub = {
+          profile_id: userId,
+          plan_name: "Free",
+          status: "Active",
+          billing_interval: "Monthly",
+          current_period_start: new Date().toISOString(),
+          current_period_end: new Date(Date.now() + 30 * 24 * 3600000).toISOString()
+        };
+        await axios.post(`${supabaseUrl}/rest/v1/subscriptions`, defaultSub, {
+          headers: { Authorization: `Bearer ${req.headers.authorization.split(" ")[1]}`, apikey: anonKey, Prefer: "return=representation" }
+        });
+        return res.json({ status: "Success", source: "SUPABASE_POSTGRES_PROVISIONED", subscription: defaultSub });
+      }
+    } catch (dbError) {
+      console.error("[Subscriptions] Supabase select/insert failed. Falling back to local state.", dbError.message);
+    }
+  }
+
+  // Fallback to offline sandbox
+  if (!activeSubscriptionsMap[userId]) {
+    activeSubscriptionsMap[userId] = {
+      id: "sub_" + Date.now(),
+      profile_id: userId,
+      plan_name: "Free",
+      status: "Active",
+      billing_interval: "Monthly",
+      current_period_start: new Date().toISOString(),
+      current_period_end: new Date(Date.now() + 30 * 24 * 3600000).toISOString()
+    };
+  }
+
+  res.json({ status: "Success", source: "OFFLINE_SANDBOX_DEMO", subscription: activeSubscriptionsMap[userId] });
+});
+
+// 3. Upgrade / Modify subscription
+app.post("/api/subscriptions/upgrade", requireAuth, async (req, res) => {
+  const userId = req.user.id;
+  const { planName, billingInterval } = req.body;
+  if (!planName) {
+    return res.status(400).json({ error: "Subscription Plan Name is required." });
+  }
+
+  const selectedPlan = SUBSCRIPTION_PLANS.find(p => p.name.toLowerCase() === planName.toLowerCase() || p.id.toLowerCase() === planName.toLowerCase());
+  if (!selectedPlan) {
+    return res.status(400).json({ error: `Invalid plan name specified: ${planName}` });
+  }
+
+  const plan_name = selectedPlan.name;
+  const interval = billingInterval || "Monthly";
+  const start = new Date().toISOString();
+  const end = new Date(Date.now() + 30 * 24 * 3600000).toISOString();
+
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const anonKey = process.env.SUPABASE_ANON_KEY;
+  const isSupabaseConfigured = !!(supabaseUrl && anonKey && !supabaseUrl.includes("PLACEHOLDER") && !anonKey.includes("PLACEHOLDER"));
+
+  if (isSupabaseConfigured) {
+    try {
+      // Upsert into subscriptions table in PostgreSQL
+      const upObject = {
+        profile_id: userId,
+        plan_name,
+        status: "Active",
+        billing_interval: interval,
+        current_period_start: start,
+        current_period_end: end
+      };
+      const response = await axios.post(`${supabaseUrl}/rest/v1/subscriptions`, upObject, {
+        headers: { 
+          Authorization: `Bearer ${req.headers.authorization.split(" ")[1]}`, 
+          apikey: anonKey, 
+          Prefer: "resolution=merge-duplicates,return=representation" 
+        }
+      });
+      return res.json({ status: "Success", source: "SUPABASE_POSTGRES", subscription: upObject });
+    } catch (dbError) {
+      console.error("[Subscriptions] Upsert failed. Falling back to local state update.", dbError.message);
+    }
+  }
+
+  // Fallback update in offline sandbox memory
+  activeSubscriptionsMap[userId] = {
+    id: "sub_" + Date.now(),
+    profile_id: userId,
+    plan_name,
+    status: "Active",
+    billing_interval: interval,
+    current_period_start: start,
+    current_period_end: end
+  };
+
+  return res.json({ status: "Success", source: "OFFLINE_SANDBOX_DEMO", subscription: activeSubscriptionsMap[userId] });
+});
+
+// 4. AI Homework Assistant: Analyze Worksheet
+app.post("/api/ai/homework-assistant", requireAuth, async (req, res) => {
+  const student_id = req.user.id;
+  const student_name = req.user.name || "Student Caleb Sterling";
+  const { subject, file_name, file_type, file_size, student_prompt, file_base64 } = req.body;
+
+  if (!file_name) {
+    return res.status(400).json({ error: "Worksheet file name is required." });
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY || "PLACEHOLDER";
+  const isGeminiConfigured = !!(apiKey && apiKey !== "PLACEHOLDER");
+
+  let aiOutput = null;
+
+  if (isGeminiConfigured) {
+    const systemInstruction = `You are the Ambience AI Homework Assistant, a premium scaffolded tutor on the Ambience TutorsFlow platform.
+Your purpose is to help students learn and solve homework. Do NOT just give away the answers immediately.
+Follow this educational protocol:
+Generate exactly the following 9 blocks in a valid JSON:
+1. conceptOverview: A detailed, premium paragraph introducing and explaining the core concepts.
+2. hint1: Concept clue/prompt that doesn't reveal the answer but stimulates critical thinking.
+3. hint2: Practical methodology guide or strategic hint on how to start calculating or drafting.
+4. guidedWalkthrough: Step-by-step reasoning or walkthrough on how to map out the entire solution without showing final answers.
+5. stepByStepSolution: Complete, step-by-step rigorous logical/mathematical calculations or analysis showing the actual solution.
+6. commonMistakes: Bullet-pointed list of common student errors, misconceptions, or algebraic slips relating to this topic.
+7. practiceQuestions: A set of 2-3 similar custom practice questions matching the exact standard of this assignment.
+8. miniQuiz: A small interactive 3-question quiz with multiple choice or open prompts AND brief answers.
+9. reflection: A deep conceptual metacognition question prompting the student to think about how they derived their answers.
+
+Format your output strictly as a single, valid JSON object with the following exact keys:
+- conceptOverview: string
+- hint1: string
+- hint2: string
+- guidedWalkthrough: string
+- stepByStepSolution: string
+- commonMistakes: string
+- practiceQuestions: string
+- miniQuiz: string
+- reflection: string
+- masteryScore: integer (0-100)`;
+
+    const userPrompt = `Subject: "${subject}"
+File Name: "${file_name}"
+File Type: "${file_type || "Unknown"}"
+Student Prompt/Question: "${student_prompt || "I need help understanding this worksheet."}"
+File Content (Simulated upload base64 length): ${file_base64 ? file_base64.length : 0}`;
+
+    try {
+      const response = await axios.post(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        {
+          contents: [{ parts: [{ text: userPrompt }] }],
+          systemInstruction: { parts: [{ text: systemInstruction }] },
+          generationConfig: {
+            responseMimeType: "application/json",
+            temperature: 0.3
+          }
+        },
+        { timeout: 20000 }
+      );
+
+      const responseText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (responseText) {
+        aiOutput = JSON.parse(responseText.trim());
+      }
+    } catch (aiError) {
+      console.error("[AI Homework Assistant] Gemini API call failed. Executing offline fallback.", aiError.message);
+    }
+  }
+
+  // ==========================================
+  // OFFLINE HIGH-FIDELITY RULE-ENGINE FALLBACK
+  // ==========================================
+  if (!aiOutput) {
+    const defaultProblems = {
+      "Mathematics": {
+        conceptOverview: "This assignment focuses on quadratic equations. A quadratic equation is of the form ax² + bx + c = 0. To solve it, we can factorize, complete the square, or apply the Quadratic Formula. The discriminant (b² - 4ac) tells us how many real solutions exist.",
+        hint1: "Identify your a, b, and c coefficients directly from the quadratic equation structure.",
+        hint2: "Calculate the discriminant (b² - 4ac) first. If it is positive, there are two real roots. If negative, roots are complex numbers.",
+        guidedWalkthrough: "Step 1: Write down coefficients a, b, and c.\nStep 2: Plug into discriminant formula (b² - 4ac).\nStep 3: Insert values into the general quadratic solution x = [-b ± √discriminant] / 2a.\nStep 4: Solve for both the positive (+) and negative (-) cases.",
+        stepByStepSolution: "Let's solve x² - 5x + 6 = 0:\n1. Coeffs: a = 1, b = -5, c = 6.\n2. Discriminant: (-5)² - 4(1)(6) = 25 - 24 = 1.\n3. x = [5 ± √1] / 2 = (5 ± 1) / 2.\n4. Roots: x = (5+1)/2 = 3, and x = (5-1)/2 = 2.\nSolutions are x = 2 or x = 3.",
+        commonMistakes: "- Forgetting that negative coefficient squares become positive, e.g., (-5)² = +25, not -25.\n- Forgetting to divide the entire numerator by 2a.\n- Sign errors when subtracting 4ac if 'c' is negative.",
+        practiceQuestions: "1. Solve x² - 7x + 12 = 0\n2. Solve 2x² - 5x + 2 = 0",
+        miniQuiz: "Q1. What is the value of the discriminant in 2x² + 5x + 3 = 0?\nAns: b² - 4ac = 25 - 24 = 1.\nQ2. What type of roots exist if the discriminant is zero?\nAns: One single real root.\nQ3. Is x = -3 a solution of x² - 9 = 0?\nAns: Yes, (-3)² - 9 = 9 - 9 = 0.",
+        reflection: "If a quadratic equation has a negative discriminant, how would you sketch its graph on a Cartesian coordinate system?",
+        masteryScore: 75
+      },
+      "Science": {
+        conceptOverview: "Stoichiometry is the quantitative relation between reactants and products in a chemical reaction. It is governed by the Law of Conservation of Mass. Coefficients in balanced chemical equations act as mole ratios to convert between masses or moles.",
+        hint1: "Balance atoms appearing in singular chemical reactants first.",
+        hint2: "Remember to compute the molar mass of your compounds using periodic table atomic masses.",
+        guidedWalkthrough: "Step 1: Write the unbalanced equation.\nStep 2: Balance carbon, hydrogen, then oxygen atoms.\nStep 3: Convert given masses to moles using (grams ÷ molar mass).\nStep 4: Scale using coefficients of the balanced equation.",
+        stepByStepSolution: "Combustion of Propane: C₃H₈ + 5O₂ → 3CO₂ + 4H₂O\n1. Left: 3 C, 8 H, 2 O. Right: 1 C, 2 H, 3 O.\n2. C coefficients balance: multiply CO₂ by 3.\n3. H coefficients balance: multiply H₂O by 4.\n4. O balance: products have 3(2) + 4 = 10 O atoms. Reactant O₂ is multiplied by 5.\n5. MASS: 1 mole propane reacting with 5 moles oxygen yields 3 moles carbon dioxide and 4 moles water vapor.",
+        commonMistakes: "- Trying to balance equations by changing chemical formula subscripts (e.g. changing CO₂ to CO₃) instead of using coefficients.\n- Forgetting that diatomic gases like O₂ have a molar mass of 32g/mol instead of 16g/mol.",
+        practiceQuestions: "1. Balance the respiration equation: C₆H₁₂O₆ + O₂ → CO₂ + H₂O\n2. If 10g of Hydrogen reacts with excess Oxygen, how many grams of Water are produced?",
+        miniQuiz: "Q1. What mass of water is in 1 mole?\nAns: ~18 grams.\nQ2. Does balancing a chemical equation alter molecular structures?\nAns: No, only quantities.\nQ3. What does STP stand for in stoichiometry?\nAns: Standard Temperature and Pressure.",
+        reflection: "Why is mass conserved in a chemical reaction but the number of total gas moles can change?",
+        masteryScore: 82
+      }
+    };
+
+    aiOutput = defaultProblems[subject] || {
+      conceptOverview: `This file contains key syllabus questions in the area of ${subject}. Mastery of fundamental principles, precise definition mapping, and logical layouts will ensure highly reliable results.`,
+      hint1: "Go over the main core formulas or terms in your curriculum units relating to this question.",
+      hint2: "Avoid guessing. Write out all given parameters, isolate what is unknown, and identify which formula relates them.",
+      guidedWalkthrough: "Step 1: Carefully read and extract facts.\nStep 2: Establish base conditions and write equations.\nStep 3: Execute math or outline step by step.\nStep 4: Check if your answer makes physical and conceptual sense.",
+      stepByStepSolution: `For ${file_name}, isolate parameters, execute standard rules of ${subject}, and verify against curriculum outline keys.`,
+      commonMistakes: "- Incorrect sign application or arithmetic slips.\n- Rushing through steps without writing intermediate terms.\n- Mixing up independent and dependent variables.",
+      practiceQuestions: `1. Explore a similar problem relating to ${subject}.\n2. Formulate a hypothesis and test it under guidelines.`,
+      miniQuiz: "Q1. What is the fundamental unit or baseline term of this topic?\nAns: Refer to syllabus definitions.\nQ2. Can we solve this problem in multiple ways?\nAns: Yes, through algebraic and graphical solutions.\nQ3. What are the key variables involved?\nAns: State variables and constants.",
+      reflection: "How can you apply this specific concept to real-world situations or daily decision-making?",
+      masteryScore: 70
+    };
+  }
+
+  const resultRecord = {
+    id: "hw_" + Date.now(),
+    created_at: new Date().toISOString(),
+    student_id,
+    student_name,
+    subject,
+    file_name,
+    file_type: file_type || "Unknown",
+    file_size: file_size || 0,
+    student_prompt,
+    concept_explanation: aiOutput.conceptOverview,
+    hints: [aiOutput.hint1, aiOutput.hint2],
+    step_by_step: aiOutput.stepByStepSolution,
+    practice_problems: { problem: aiOutput.practiceQuestions, solution: aiOutput.stepByStepSolution },
+    mastery_score: aiOutput.masteryScore,
+    guided_walkthrough: aiOutput.guidedWalkthrough,
+    common_mistakes: aiOutput.commonMistakes,
+    mini_quiz: aiOutput.miniQuiz,
+    reflection: aiOutput.reflection
+  };
+
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const anonKey = process.env.SUPABASE_ANON_KEY;
+  const isSupabaseConfigured = !!(supabaseUrl && anonKey && !supabaseUrl.includes("PLACEHOLDER") && !anonKey.includes("PLACEHOLDER"));
+
+  if (isSupabaseConfigured) {
+    try {
+      await axios.post(`${supabaseUrl}/rest/v1/homework_assistant_records`, resultRecord, {
+        headers: { 
+          Authorization: `Bearer ${req.headers.authorization.split(" ")[1]}`, 
+          apikey: anonKey,
+          Prefer: "return=representation"
+        }
+      });
+      return res.json({ status: "Success", source: "SUPABASE_POSTGRES", record: resultRecord });
+    } catch (dbError) {
+      console.error("[Homework Assistant] Insert record failed. Falling back to local array.", dbError.message);
+    }
+  }
+
+  homeworkAssistantDb.push(resultRecord);
+  res.json({ status: "Success", source: "OFFLINE_DEMO_ENGINE", record: resultRecord });
+});
+
+// 5. Get homework assistant history records
+app.get("/api/ai/homework-assistant/records", requireAuth, async (req, res) => {
+  const student_id = req.user.id;
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const anonKey = process.env.SUPABASE_ANON_KEY;
+  const isSupabaseConfigured = !!(supabaseUrl && anonKey && !supabaseUrl.includes("PLACEHOLDER") && !anonKey.includes("PLACEHOLDER"));
+
+  if (isSupabaseConfigured) {
+    try {
+      const response = await axios.get(`${supabaseUrl}/rest/v1/homework_assistant_records?student_id=eq.${student_id}&order=created_at.desc`, {
+        headers: { Authorization: `Bearer ${req.headers.authorization.split(" ")[1]}`, apikey: anonKey }
+      });
+      return res.json({ status: "Success", source: "SUPABASE_POSTGRES", records: response.data || [] });
+    } catch (dbError) {
+      console.error("[Homework Assistant] Fetch records failed. Falling back to memory storage.", dbError.message);
+    }
+  }
+
+  // Filter local memory records by student_id
+  const studentRecords = homeworkAssistantDb
+    .filter(r => r.student_id === student_id)
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  res.json({ status: "Success", source: "OFFLINE_DEMO_ENGINE", records: studentRecords });
+});
+
 
 
 // =========================================================================

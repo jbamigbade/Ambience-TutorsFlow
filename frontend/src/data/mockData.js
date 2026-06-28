@@ -389,3 +389,82 @@ export const INITIAL_CHARACTER_NOTES = [
     recommendation: "Spend 5 minutes planning homework goals before starting the math session."
   }
 ];
+
+// Phase 15 Realistic Notification Center Seeds
+export const INITIAL_NOTIFICATIONS = [
+  {
+    id: "notif_1",
+    category: "reminders",
+    title: "Homework Due Soon",
+    message: "Trigonometric Proofs homework is pending and due in 3 days (June 29, 2026).",
+    time: "2 hours ago",
+    unread: true,
+    targetPage: "Dashboard"
+  },
+  {
+    id: "notif_2",
+    category: "sessions",
+    title: "Upcoming Session",
+    message: "Your SAT Prep session with Dr. Elijah Vance is confirmed for June 30 at 3:30 PM.",
+    time: "5 hours ago",
+    unread: true,
+    targetPage: "Dashboard"
+  },
+  {
+    id: "notif_3",
+    category: "messages",
+    title: "New Parent Message",
+    message: "Mrs. Sarah Jenkins sent a message: 'Caleb did an exceptional job working through trig...'",
+    time: "Yesterday",
+    unread: true,
+    targetPage: "Dashboard"
+  },
+  {
+    id: "notif_4",
+    category: "updates",
+    title: "Study Roadmap Updated",
+    message: "Dr. Elijah Vance uploaded the 'Pre-Calculus Double-Angle Cheat Sheet' to your Study Vault.",
+    time: "Yesterday",
+    unread: false,
+    targetPage: "Dashboard"
+  },
+  {
+    id: "notif_5",
+    category: "renewals",
+    title: "Subscription Renewal",
+    message: "Your Student AI Plus subscription will auto-renew on July 11, 2026.",
+    time: "2 days ago",
+    unread: false,
+    targetPage: "Pricing"
+  },
+  {
+    id: "notif_6",
+    category: "payments",
+    title: "Payment Confirmation",
+    message: "Invoice #inv_1093 ($240.00) for SAT Prep Core Sessions was paid successfully.",
+    time: "3 days ago",
+    unread: false,
+    targetPage: "Dashboard"
+  },
+  {
+    id: "notif_7",
+    category: "progress",
+    title: "Weekly Progress Report",
+    message: "Your weekly progress report is ready. Overall mastery increased by 2% this week!",
+    time: "4 days ago",
+    unread: false,
+    targetPage: "Dashboard"
+  },
+  {
+    id: "notif_8",
+    category: "achievements",
+    title: "Virtue Badge Unlocked",
+    message: "Caleb Sterling was awarded the 'Perseverance Champion' virtue badge for academic resilience.",
+    time: "5 days ago",
+    unread: true,
+    targetPage: "Dashboard"
+  }
+];
+
+// Soli Deo Gloria — Glory to God the Father, God the Son, and God the Holy Spirit.
+

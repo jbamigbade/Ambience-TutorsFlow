@@ -11,7 +11,8 @@ import {
   INITIAL_BOOKINGS,
   GROWTH_JOURNEY_LEVELS,
   INITIAL_CHARACTER_NOTES,
-  CHARACTER_BADGES
+  CHARACTER_BADGES,
+  INITIAL_NOTIFICATIONS
 } from "../data/mockData";
 
 export const AppContext = createContext();
@@ -42,7 +43,38 @@ export const AppProvider = ({ children }) => {
   const [copilotRecords, setCopilotRecords] = useState([]);
   const [parentCopilotRecords, setParentCopilotRecords] = useState([]);
   const [adminInsights, setAdminInsights] = useState([]);
+  
+  // Phase 11 Subscription AI Learning Ecosystem
+  const [activeSubscription, setActiveSubscription] = useState(null);
+  const [homeworkAssistantRecords, setHomeworkAssistantRecords] = useState([]);
 
+  // Phase 15 Global Notifications State and Actions
+  const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
+
+  const markNotificationRead = (id) => {
+    setNotifications((prev) =>
+      prev.map((notif) => (notif.id === id ? { ...notif, unread: false } : notif))
+    );
+  };
+
+  const markAllNotificationsRead = () => {
+    setNotifications((prev) =>
+      prev.map((notif) => ({ ...notif, unread: false }))
+    );
+  };
+
+  const addNotification = (category, title, message, targetPage = "Dashboard") => {
+    const newNotif = {
+      id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      category,
+      title,
+      message,
+      time: "Just now",
+      unread: true,
+      targetPage
+    };
+    setNotifications((prev) => [newNotif, ...prev]);
+  };
 
   // Live Zoom Integration States
   const [tutorZoomStatus, setTutorZoomStatus] = useState("Not Connected"); // Connected, Not Connected, Reconnect Required
@@ -503,6 +535,19 @@ export const AppProvider = ({ children }) => {
       }
     } else if (!isLoggedIn) {
       setCurrentProfile(null);
+    }
+  }, [isLoggedIn, userRole]);
+
+  // Phase 11 Subscription & Homework Auto-Fetch
+  useEffect(() => {
+    if (isLoggedIn) {
+      fetchActiveSubscription();
+      if (userRole === "Student") {
+        fetchHomeworkAssistantRecords();
+      }
+    } else {
+      setActiveSubscription(null);
+      setHomeworkAssistantRecords([]);
     }
   }, [isLoggedIn, userRole]);
 
@@ -2072,6 +2117,90 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  // =========================================================================
+  // PHASE 11: SUBSCRIPTION ECOSYSTEM ACTIONS
+  // =========================================================================
+  const fetchActiveSubscription = async () => {
+    try {
+      const res = await apiFetch("/api/subscriptions/active");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === "Success") {
+          setActiveSubscription(data.subscription);
+          return data.subscription;
+        }
+      }
+    } catch (err) {
+      console.error("[Subscription] Error fetching active subscription:", err);
+    }
+    return null;
+  };
+
+  const upgradeSubscription = async (planName, billingInterval = "Monthly") => {
+    try {
+      const res = await apiFetch("/api/subscriptions/upgrade", {
+        method: "POST",
+        body: JSON.stringify({ planName, billingInterval })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === "Success") {
+          setActiveSubscription(data.subscription);
+          return data.subscription;
+        } else {
+          throw new Error(data.error || "Failed to upgrade subscription.");
+        }
+      } else {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to upgrade subscription.");
+      }
+    } catch (err) {
+      console.error("[Subscription] Upgrade failed:", err);
+      throw err;
+    }
+  };
+
+  const fetchHomeworkAssistantRecords = async () => {
+    try {
+      const res = await apiFetch("/api/ai/homework-assistant/records");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === "Success") {
+          setHomeworkAssistantRecords(data.records || []);
+          return data.records;
+        }
+      }
+    } catch (err) {
+      console.error("[Homework Assistant] Error fetching records:", err);
+    }
+    return [];
+  };
+
+  const analyzeHomework = async (payload) => {
+    try {
+      const res = await apiFetch("/api/ai/homework-assistant", {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === "Success") {
+          const record = data.record;
+          setHomeworkAssistantRecords((prev) => [record, ...prev]);
+          return record;
+        } else {
+          throw new Error(data.error || "Failed to analyze homework.");
+        }
+      } else {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to analyze homework.");
+      }
+    } catch (err) {
+      console.error("[Homework Assistant] Analysis failed:", err);
+      throw err;
+    }
+  };
+
 
   const apiFetch = async (url, options = {}) => {
     const headers = { ...(options.headers || {}) };
@@ -2187,10 +2316,28 @@ export const AppProvider = ({ children }) => {
         isLoading,
         setIsLoading,
         authError,
-        setAuthError
+        setAuthError,
+        // Phase 11 Subscription Ecosystem
+        activeSubscription,
+        setActiveSubscription,
+        homeworkAssistantRecords,
+        setHomeworkAssistantRecords,
+        fetchActiveSubscription,
+        upgradeSubscription,
+        fetchHomeworkAssistantRecords,
+        analyzeHomework,
+        // Phase 15 Global Notifications
+        notifications,
+        setNotifications,
+        markNotificationRead,
+        markAllNotificationsRead,
+        addNotification
       }}
     >
       {children}
     </AppContext.Provider>
   );
 };
+
+// Soli Deo Gloria — Glory to God the Father, God the Son, and God the Holy Spirit.
+

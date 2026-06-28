@@ -74,4 +74,16 @@ Before triggering production deployments, ensure the following steps are perform
 - **Strict HTTPS Rewrite**: Both Vercel and Render/Railway configurations are configured with secure HTTP headers and strict redirects to prevent middleman sniffing.
 
 ---
-*For support or technical audits, refer to the individual documents or contact the Engineering Lead.*
+
+## 🎓 Version 1.0 Release Candidate Sign-Off Requirements
+
+Before promoting the release candidate to production, complete the following QA checklist:
+- **Build Status Verification**: Execute `npm run build` and `node -c backend/server.js` to ensure zero errors or warnings.
+- **Universal Database Search Check**: Verify the global search icon triggers the modal, scans all 9 core entities, matches categories correctly, and closes instantly with the physical Escape key or modal backdrop clicks.
+- **Notification Dropdown Check**: Verify the alert badge reflects unread notification counts, renders categorized items correctly on desktop/mobile, and allows toggling single or all items as read.
+- **Theme & Responsiveness**: Review the dark glassmorphic portals on mobile, tablet, and desktop formats. Confirm no horizontal scrolls or overflow breakages occur and ensure a minimum `44px` target height for buttons.
+- **Accessibility Halos**: Verify keyboard tabbing produces clear visual focus indicators (`*:focus-visible`) across all portal items without cluttering mouse clicks.
+
+---
+
+Soli Deo Gloria — Glory to God the Father, God the Son, and God the Holy Spirit.

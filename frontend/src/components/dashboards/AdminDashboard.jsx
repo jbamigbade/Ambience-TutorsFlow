@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import AiAdminIntelligence from "./AiAdminIntelligence";
 import AiCollaborationHub from "./AiCollaborationHub";
+import SubscriptionManager from "./SubscriptionManager";
 
 export default function AdminDashboard() {
   const {
@@ -350,6 +351,10 @@ export default function AdminDashboard() {
           <Mail className="tab-trigger-icon" />
           <span>Collaboration Hub</span>
         </button>
+        <button className={`dashboard-tab-trigger ${activeSubTab === "Subscriptions" ? "active" : ""}`} onClick={() => setActiveSubTab("Subscriptions")}>
+          <CreditCard className="tab-trigger-icon" />
+          <span>Subscriptions</span>
+        </button>
       </div>
 
       {/* Admin Main Window Panels */}
@@ -357,10 +362,41 @@ export default function AdminDashboard() {
         
         {/* Tab: Platform Telemetry */}
         {activeSubTab === "Telemetry" && (
-          <div className="telemetry-grid animate-scale-up">
+          <div className="telemetry-grid animate-scale-up flex flex-col gap-6">
             
-            {/* KPI Cards Row */}
-            <div className="overview-kpis">
+            {/* SaaS Revenue Metrics Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+              <div className="kpi-card p-5 border border-purple-500/10 bg-gradient-to-br from-slate-900 to-purple-950/10 rounded-2xl shadow-lg relative overflow-hidden">
+                <div className="absolute top-0 right-0 h-16 w-16 bg-purple-500/5 rounded-full blur-xl"></div>
+                <span className="text-[10px] text-purple-400 font-bold uppercase tracking-wider block">Monthly Recurring (MRR)</span>
+                <h3 className="text-2xl font-black text-white mt-1">$14,850.00</h3>
+                <p className="text-[10px] text-slate-500 mt-1">✦ Active Premium subscriptions</p>
+              </div>
+
+              <div className="kpi-card p-5 border border-indigo-500/10 bg-gradient-to-br from-slate-900 to-indigo-950/10 rounded-2xl shadow-lg relative overflow-hidden">
+                <div className="absolute top-0 right-0 h-16 w-16 bg-indigo-500/5 rounded-full blur-xl"></div>
+                <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider block">Annual Recurring (ARR)</span>
+                <h3 className="text-2xl font-black text-white mt-1">$178,200.00</h3>
+                <p className="text-[10px] text-slate-500 mt-1">✦ 12x MRR projection run-rate</p>
+              </div>
+
+              <div className="kpi-card p-5 border border-emerald-500/10 bg-gradient-to-br from-slate-900 to-emerald-950/10 rounded-2xl shadow-lg relative overflow-hidden">
+                <div className="absolute top-0 right-0 h-16 w-16 bg-emerald-500/5 rounded-full blur-xl"></div>
+                <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider block">Renewal rate state</span>
+                <h3 className="text-2xl font-black text-white mt-1">98.2%</h3>
+                <p className="text-[10px] text-emerald-400 mt-1">▲ +0.4% MoM improvement</p>
+              </div>
+
+              <div className="kpi-card p-5 border border-rose-500/10 bg-gradient-to-br from-slate-900 to-rose-950/10 rounded-2xl shadow-lg relative overflow-hidden">
+                <div className="absolute top-0 right-0 h-16 w-16 bg-rose-500/5 rounded-full blur-xl"></div>
+                <span className="text-[10px] text-rose-400 font-bold uppercase tracking-wider block">Customer Churn Rate</span>
+                <h3 className="text-2xl font-black text-white mt-1">1.8%</h3>
+                <p className="text-[10px] text-rose-400 mt-1">▼ -0.2% MoM reduction</p>
+              </div>
+            </div>
+
+            {/* Standard Financial Settlements Row */}
+            <div className="overview-kpis grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
               <div className="kpi-card purple-kpi">
                 <span className="kpi-label">Settled Gross Revenue</span>
                 <h3>${(billingStats.grossRevenue || 0).toFixed(2)}</h3>
@@ -386,27 +422,148 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* Service Distribution Report mockup */}
-            <div className="telemetry-chart-card">
-              <h3>Academic Portfolio Share</h3>
-              <p>Platform distribution by student registration categories.</p>
+            {/* Growth & Subject analytics columns */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
               
-              <div className="progress-bars-distribution">
-                <div className="telemetry-dist-row">
-                  <span>K-12 Core Academics (42%)</span>
-                  <div className="meter-wrapper"><div className="meter-fill" style={{ width: "42%" }}></div></div>
+              {/* Left Column: Commercial Growth Ratios */}
+              <div className="telemetry-chart-card p-6 border border-slate-800 bg-slate-900/40 backdrop-blur-md rounded-2xl">
+                <h3 className="text-base font-extrabold text-white mb-1">Commercial Growth & Metrics</h3>
+                <p className="text-slate-500 text-xs mb-4">Real-time platform acquisition growth and core activity usage.</p>
+                
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex justify-between text-xs font-bold text-slate-300 mb-1">
+                      <span>Student Account Growth (MoM)</span>
+                      <span className="text-emerald-400">+24.5% ▲</span>
+                    </div>
+                    <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                      <div className="bg-purple-500 h-full rounded-full" style={{ width: "74%" }}></div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between text-xs font-bold text-slate-300 mb-1">
+                      <span>Tutor Registration Growth (MoM)</span>
+                      <span className="text-emerald-400">+12.8% ▲</span>
+                    </div>
+                    <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                      <div className="bg-indigo-500 h-full rounded-full" style={{ width: "52%" }}></div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between text-xs font-bold text-slate-300 mb-1">
+                      <span>Institutional Client Growth (MoM)</span>
+                      <span className="text-emerald-400">+8.0% ▲</span>
+                    </div>
+                    <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                      <div className="bg-teal-500 h-full rounded-full" style={{ width: "35%" }}></div>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-slate-800/80 pt-4 grid grid-cols-2 gap-4">
+                    <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-850">
+                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Homework Uploads</span>
+                      <strong className="text-lg text-white font-black">4,820</strong>
+                      <span className="text-[9px] text-emerald-400 block mt-0.5">▲ +18% this month</span>
+                    </div>
+                    <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-850">
+                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">AI Tutor Requests</span>
+                      <strong className="text-lg text-white font-black">12,850</strong>
+                      <span className="text-[9px] text-emerald-400 block mt-0.5">▲ +32% this month</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="telemetry-dist-row">
-                  <span>College Mathematics (28%)</span>
-                  <div className="meter-wrapper"><div className="meter-fill" style={{ width: "28%" }}></div></div>
+              </div>
+
+              {/* Right Column: Portfolio & Subject Popularity */}
+              <div className="telemetry-chart-card p-6 border border-slate-800 bg-slate-900/40 backdrop-blur-md rounded-2xl">
+                <h3 className="text-base font-extrabold text-white mb-1">Academic Portfolio & Subject Share</h3>
+                <p className="text-slate-500 text-xs mb-4">Platform utilization sorted by tutoring subjects and syllabus blocks.</p>
+                
+                <div className="progress-bars-distribution space-y-3.5">
+                  <div className="telemetry-dist-row flex flex-col gap-1.5">
+                    <div className="flex justify-between text-xs font-semibold text-slate-300">
+                      <span>Mathematics & Calculus (45%)</span>
+                      <span className="text-purple-400 font-bold">2,169 Uploads</span>
+                    </div>
+                    <div className="meter-wrapper bg-slate-800 h-2 rounded-full overflow-hidden">
+                      <div className="meter-fill bg-purple-500 h-full rounded-full" style={{ width: "45%" }}></div>
+                    </div>
+                  </div>
+
+                  <div className="telemetry-dist-row flex flex-col gap-1.5">
+                    <div className="flex justify-between text-xs font-semibold text-slate-300">
+                      <span>Science / Stoichiometry (25%)</span>
+                      <span className="text-indigo-400 font-bold">1,205 Uploads</span>
+                    </div>
+                    <div className="meter-wrapper bg-slate-800 h-2 rounded-full overflow-hidden">
+                      <div className="meter-fill bg-indigo-500 h-full rounded-full" style={{ width: "25%" }}></div>
+                    </div>
+                  </div>
+
+                  <div className="telemetry-dist-row flex flex-col gap-1.5">
+                    <div className="flex justify-between text-xs font-semibold text-slate-300">
+                      <span>English / Essays / Writing (15%)</span>
+                      <span className="text-teal-400 font-bold">723 Uploads</span>
+                    </div>
+                    <div className="meter-wrapper bg-slate-800 h-2 rounded-full overflow-hidden">
+                      <div className="meter-fill bg-teal-500 h-full rounded-full" style={{ width: "15%" }}></div>
+                    </div>
+                  </div>
+
+                  <div className="telemetry-dist-row flex flex-col gap-1.5">
+                    <div className="flex justify-between text-xs font-semibold text-slate-300">
+                      <span>Computer Science / Coding (10%)</span>
+                      <span className="text-amber-400 font-bold">482 Uploads</span>
+                    </div>
+                    <div className="meter-wrapper bg-slate-800 h-2 rounded-full overflow-hidden">
+                      <div className="meter-fill bg-amber-500 h-full rounded-full" style={{ width: "10%" }}></div>
+                    </div>
+                  </div>
+
+                  <div className="telemetry-dist-row flex flex-col gap-1.5">
+                    <div className="flex justify-between text-xs font-semibold text-slate-300">
+                      <span>History / Bible Study / Other (5%)</span>
+                      <span className="text-slate-400 font-bold">241 Uploads</span>
+                    </div>
+                    <div className="meter-wrapper bg-slate-800 h-2 rounded-full overflow-hidden">
+                      <div className="meter-fill bg-slate-500 h-full rounded-full" style={{ width: "5%" }}></div>
+                    </div>
+                  </div>
                 </div>
-                <div className="telemetry-dist-row">
-                  <span>SAT & ACT Course Prep (20%)</span>
-                  <div className="meter-wrapper"><div className="meter-fill" style={{ width: "20%" }}></div></div>
+              </div>
+
+            </div>
+
+            {/* Revenue by Subscription Plan Card */}
+            <div className="telemetry-chart-card p-6 border border-slate-800 bg-slate-900/40 backdrop-blur-md rounded-2xl mb-4">
+              <h3 className="text-base font-extrabold text-white mb-1">Revenue Breakdown by Plan</h3>
+              <p className="text-slate-500 text-xs mb-4">Summary of platform-wide cashflows generated by product tier groups.</p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-slate-950/40 p-4 rounded-xl border border-slate-850 flex flex-col justify-between">
+                  <div>
+                    <span className="text-[10px] text-purple-400 font-bold uppercase tracking-wider block">Student AI Plans</span>
+                    <strong className="text-xl text-white font-black block mt-1">$6,840.00</strong>
+                    <span className="text-[10px] text-slate-500 block mt-1">Student AI Plus (Recommended) is the highest volume channel representing 72% of student revenue.</span>
+                  </div>
                 </div>
-                <div className="telemetry-dist-row">
-                  <span>IEP & Specialized Services (10%)</span>
-                  <div className="meter-wrapper"><div className="meter-fill" style={{ width: "10%" }}></div></div>
+
+                <div className="bg-slate-950/40 p-4 rounded-xl border border-slate-850 flex flex-col justify-between">
+                  <div>
+                    <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider block">Professional Tutor Plans</span>
+                    <strong className="text-xl text-white font-black block mt-1">$4,810.00</strong>
+                    <span className="text-[10px] text-slate-500 block mt-1">Tutor Starter, Flex, Professional, and Elite. Flex and Professional options are most popular.</span>
+                  </div>
+                </div>
+
+                <div className="bg-slate-950/40 p-4 rounded-xl border border-slate-850 flex flex-col justify-between">
+                  <div>
+                    <span className="text-[10px] text-teal-400 font-bold uppercase tracking-wider block">Institutional Plans</span>
+                    <strong className="text-xl text-white font-black block mt-1">$3,200.00</strong>
+                    <span className="text-[10px] text-slate-500 block mt-1">Business, School, and Enterprise. Large districts drive institutional tier conversions.</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -913,6 +1070,11 @@ export default function AdminDashboard() {
         {/* Tab: Collaboration Hub */}
         {activeSubTab === "Collaboration" && (
           <AiCollaborationHub />
+        )}
+
+        {/* Tab: Subscriptions */}
+        {activeSubTab === "Subscriptions" && (
+          <SubscriptionManager />
         )}
 
       </div>

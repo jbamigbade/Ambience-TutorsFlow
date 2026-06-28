@@ -1,6 +1,9 @@
 import React, { useContext, useState } from "react";
 import { AppContext } from "../../context/AppContext";
 import AiCollaborationHub from "./AiCollaborationHub";
+import AiHomeworkAssistant from "./AiHomeworkAssistant";
+import SubscriptionManager from "./SubscriptionManager";
+import AiStudyVault from "./AiStudyVault";
 import {
   Sparkles,
   Calendar,
@@ -293,6 +296,21 @@ export default function StudentDashboard() {
               <button className={`sidebar-nav-btn ${activeTab === "Collaboration" ? "active" : ""}`} onClick={() => setActiveTab("Collaboration")}>
                 <BookOpen className="sidebar-nav-icon text-indigo-400" />
                 <span>Collaboration Hub</span>
+                <ChevronRight className="chevron-right-arrow" />
+              </button>
+              <button className={`sidebar-nav-btn ${activeTab === "AI_Homework" ? "active" : ""}`} onClick={() => setActiveTab("AI_Homework")}>
+                <Sparkles className="sidebar-nav-icon text-purple-400" />
+                <span>AI Homework Workspace</span>
+                <ChevronRight className="chevron-right-arrow" />
+              </button>
+              <button className={`sidebar-nav-btn ${activeTab === "StudyVault" ? "active" : ""}`} onClick={() => setActiveTab("StudyVault")}>
+                <BookOpen className="sidebar-nav-icon text-indigo-400" />
+                <span>AI Study Vault</span>
+                <ChevronRight className="chevron-right-arrow" />
+              </button>
+              <button className={`sidebar-nav-btn ${activeTab === "Subscription" ? "active" : ""}`} onClick={() => setActiveTab("Subscription")}>
+                <Zap className="sidebar-nav-icon text-amber-500" />
+                <span>My Plan</span>
                 <ChevronRight className="chevron-right-arrow" />
               </button>
             </div>
@@ -1299,6 +1317,24 @@ export default function StudentDashboard() {
             </div>
           )}
 
+          {activeTab === "AI_Homework" && (
+            <div className="animate-scale-up">
+              <AiHomeworkAssistant setActiveTab={setActiveTab} />
+            </div>
+          )}
+
+          {activeTab === "StudyVault" && (
+            <div className="animate-scale-up">
+              <AiStudyVault />
+            </div>
+          )}
+
+          {activeTab === "Subscription" && (
+            <div className="animate-scale-up">
+              <SubscriptionManager />
+            </div>
+          )}
+
         </div>
       </div>
 
@@ -1323,3 +1359,5 @@ export default function StudentDashboard() {
     </div>
   );
 }
+
+// Soli Deo Gloria — Glory to God the Father, God the Son, and God the Holy Spirit.
